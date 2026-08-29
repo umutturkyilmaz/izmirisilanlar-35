@@ -4,6 +4,7 @@ import { I18nextProvider } from "react-i18next";
 import i18n from "./i18n";
 import { AuthProvider } from "@/hooks/useAuth";
 import CookieBanner from "@/components/feature/CookieBanner";
+import ConfigBanner from "@/components/feature/ConfigBanner";
 import ErrorBoundary from "@/components/feature/ErrorBoundary";
 import { useEffect } from "react";
 import { expireOutdatedJobs } from "@/lib/expireJobs";
@@ -24,6 +25,7 @@ function App() {
             <JobExpiryRunner />
             <AppRoutes />
             <CookieBanner />
+            <ConfigBanner />
           </BrowserRouter>
         </ErrorBoundary>
       </AuthProvider>
