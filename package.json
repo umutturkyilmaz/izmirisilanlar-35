@@ -34,6 +34,9 @@
   },
   "name": "izmir-is-ilanlari-35",
   "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "build": "vite build",
     "dev": "vite",
