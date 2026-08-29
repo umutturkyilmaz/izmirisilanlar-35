@@ -13,9 +13,11 @@ ENV VITE_PUBLIC_SITE_URL=$VITE_PUBLIC_SITE_URL
 RUN npm run build
 
 FROM nginx:alpine
-COPY nginx.conf /etc/nginx/templates/default.conf.template
+RUN rm -f /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/template.conf
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 COPY --from=build /app/out /usr/share/nginx/html
-ENV PORT=80
-EXPOSE 80
-# nginx image runs envsubst on /etc/nginx/templates/*.template → conf.d/
-CMD ["nginx", "-g", "daemon off;"]
+ENV PORT=8080
+EXPOSE 8080
+ENTRYPOINT ["/entrypoint.sh"]

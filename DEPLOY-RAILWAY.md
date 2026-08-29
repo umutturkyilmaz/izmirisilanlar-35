@@ -33,37 +33,38 @@ GitHub bağlıysa push yeterli. Manuel:
 railway up
 ```
 
-## 4) Alan adları (Railway)
+## 4) Alan adları — DNS (senin panel + Railway)
 
-### A) `izmirisilanlari35.com` (asıl site)
+`izmirisilanlari35.com` şu an **WordPress IP**’lerine gidiyor (`192.0.78.x`).  
+Railway `oft9sx45.up.railway.app` için DNS henüz tamam değil; `_railway-verify` TXT yok.
 
-Railway Dashboard → Service → **Settings → Networking → Custom Domain**:
+### Adım 1 — WordPress’ten domain’i ayır
+WordPress.com → Domains → `izmirisilanlari35.com` → **Disconnect / Remove**.  
+Kayıtlardaki “WordPress.com tarafından işlendi” kalkmadan Railway CNAME yazılamaz.
 
-1. `izmirisilanlari35.com` ekle  
-2. `www.izmirisilanlari35.com` ekle  
-3. Railway’in verdiği **CNAME / DNS** kayıtlarını domain sağlayıcında oluştur  
+### Adım 2 — DNS kayıtları (Railway’in istediği)
+Registrar DNS panelinde:
 
-Tipik DNS (Railway ekranındaki değerleri kullan; örnek):
+| TÜR  | İSİM             | DEĞER                                      |
+|------|------------------|--------------------------------------------|
+| CNAME | `@`             | `oft9sx45.up.railway.app`                  |
+| TXT   | `_railway-verify` | Railway’deki **tam** `railway-verify=...` (kopyala butonu) |
+| CNAME | `www`           | `oft9sx45.up.railway.app`                  |
 
-| Tip   | Host | Değer                          |
-|-------|------|--------------------------------|
-| CNAME | www  | `xxxx.up.railway.app`          |
-| ALIAS/ANAME veya CNAME düzeltmesi | @ | Railway’in gösterdiği hedef |
+- Eski WordPress **A** kaydını sil veya CNAME `@` ile değiştir.  
+- `@` için CNAME kabul etmeyen panelde Railway’in verdiği **ALIAS/ANAME** veya A kaydını kullan.  
+- TXT sarı uyarı kalkana kadar bekle (5–30 dk, bazen 1–2 saat).
 
-TLS sertifikasını Railway otomatik verir (DNS yayılınca, birkaç dakika–saat).
+### Adım 3 — Önce Railway URL
+Deploy yeşil olduktan sonra tarayıcıda dene:  
+https://oft9sx45.up.railway.app  
 
-### B) `izmirisilanlari35.wordpress.com`
+Burada site açılmadan domain de açılmaz.
 
-Bu adres **WordPress.com’un alt alanı**; DNS’i Railway’e bağlanamaz.  
-Railway’e custom domain olarak **eklenemez**.
+### Adım 4 — wordpress.com alt alan
+`izmirisilanlari35.wordpress.com` → WordPress’te yönlendir → `https://izmirisilanlari35.com`  
+(Railway’e custom domain olarak eklenemez.)
 
-Yapılacak: WordPress.com panelinde siteyi  
-`https://izmirisilanlari35.com` adresine **yönlendir** (Site Redirect / yönlendirme).  
-Ücretsiz planda kısıtlı olabilir; yoksa WordPress ana sayfasına tek satırlık yönlendirme koy:
-
-Eski WordPress ziyaretçileri → asıl site (Railway).
-
-`izmirisilanlari35.com` daha önce WordPress’e bağlıysa: WordPress’ten custom domain’i **kaldır**, DNS’i yukarıdaki gibi Railway’e çevir.
 
 ## 5) Supabase Auth URL’leri
 
