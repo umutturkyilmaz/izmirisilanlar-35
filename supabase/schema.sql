@@ -1,2 +1,0 @@
--- Eski / kısmi şema. BOŞ proje için kullanma.
--- Yeni kurulum: full-setup.sql dosyasını çalıştır.

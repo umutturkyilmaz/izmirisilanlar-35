@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { ASSETS } from '@/lib/assets';
 
 interface Job {
@@ -27,15 +27,7 @@ export default function FeaturedJobsSection() {
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        const { data, error: fetchError } = await supabase
-          .from('jobs')
-          .select('*')
-          .eq('status', 'active')
-          .eq('featured', true)
-          .order('created_at', { ascending: false })
-          .limit(4);
-
-        if (fetchError) throw fetchError;
+        const data = await api<Job[]>('/api/jobs?status=active&featured=true&limit=4', { auth: false });
         setJobs(data || []);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'İlanlar yüklenemedi');

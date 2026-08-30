@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 import ApplicationsSection from '@/pages/profil/isveren/components/ApplicationsSection';
 import { fetchCredits, consumeCredit } from '@/lib/credits';
 import { downloadInvoicePdf } from '@/lib/invoice';
@@ -76,33 +76,20 @@ export default function EmployerProfilePage() {
     const fetchMyJobs = async () => {
       setJobsLoading(true);
       try {
-        interface JobRaw {
-          id: string;
-          title: string;
-          company_name: string;
-          city: string;
-          sector: string;
-          job_type: string;
-          status: string;
-          featured: boolean;
-          created_at: string;
-          expires_at: string;
-          applications: { id: string }[];
+        const [jobs, apps] = await Promise.all([
+          api<Omit<JobListing, 'application_count'>[]>(`/api/jobs?employer_id=${user.id}`),
+          api<{ job_id: string }[]>('/api/applications/employer'),
+        ]);
+        const countByJob: Record<string, number> = {};
+        for (const a of apps || []) {
+          countByJob[a.job_id] = (countByJob[a.job_id] || 0) + 1;
         }
-
-        const { data, error: fetchError } = await supabase
-          .from('jobs')
-          .select('id, title, company_name, city, sector, job_type, status, featured, created_at, expires_at, applications:applications(id)')
-          .eq('employer_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (fetchError) throw fetchError;
-
-        const mapped: JobListing[] = (data as unknown as JobRaw[]).map((job) => ({
-          ...job,
-          application_count: (job.applications || []).length,
-        }));
-        setMyJobs(mapped);
+        setMyJobs(
+          (jobs || []).map((job) => ({
+            ...job,
+            application_count: countByJob[job.id] || 0,
+          })),
+        );
       } catch {
         // silent
       } finally {
@@ -115,41 +102,17 @@ export default function EmployerProfilePage() {
   const fetchJobApplications = async (jobId: string) => {
     setAppsLoading(true);
     try {
-      interface AppRaw {
-        id: string;
-        job_id: string;
-        candidate_id: string;
-        status: string;
-        cover_letter: string | null;
-        created_at: string;
-        jobs: { title: string } | { title: string }[];
-        profiles: { full_name: string } | { full_name: string }[];
-      }
-
-      const { data, error: fetchError } = await supabase
-        .from('applications')
-        .select('id, job_id, candidate_id, status, cover_letter, created_at, jobs:job_id(title), profiles:candidate_id(full_name)')
-        .eq('job_id', jobId)
-        .order('created_at', { ascending: false });
-
-      if (fetchError) throw fetchError;
-
-      const mapped: ApplicationItem[] = (data as unknown as AppRaw[]).map((app) => {
-        const job = Array.isArray(app.jobs) ? app.jobs[0] : app.jobs;
-        const prof = Array.isArray(app.profiles) ? app.profiles[0] : app.profiles;
-        return {
-          id: app.id,
-          job_id: app.job_id,
-          candidate_id: app.candidate_id,
-          status: app.status,
-          cover_letter: app.cover_letter,
-          created_at: app.created_at,
-          job_title: job?.title || '',
-          candidate_name: prof?.full_name || 'Anonim',
-          candidate_email: '',
-        };
-      });
-      setSelectedJobApplications(mapped);
+      const data = await api<ApplicationItem[]>('/api/applications/employer');
+      setSelectedJobApplications(
+        (data || [])
+          .filter((a) => a.job_id === jobId)
+          .map((a) => ({
+            ...a,
+            job_title: a.job_title || '',
+            candidate_name: a.candidate_name || 'Anonim',
+            candidate_email: a.candidate_email || '',
+          })),
+      );
       setShowApplicationsModal(true);
     } catch {
       // silent
@@ -198,16 +161,13 @@ export default function EmployerProfilePage() {
     setVerificationMsg('');
 
     try {
-      const { error: verifyError } = await supabase
-        .from('profiles')
-        .update({
-          vergi_numarasi: cleaned,
-          dogrulama_durumu: 'pending',
-          dogrulama_talebi_tarihi: new Date().toISOString(),
-        })
-        .eq('id', user!.id);
+      const result = await updateProfile({
+        vergi_numarasi: cleaned,
+        dogrulama_durumu: 'pending',
+        dogrulama_talebi_tarihi: new Date().toISOString(),
+      });
 
-      if (verifyError) throw verifyError;
+      if (!result.success) throw new Error(result.error || 'Hata');
 
       setVerificationMsg('Doğrulama talebiniz alındı. Vergi numaranız incelendikten sonra ilan vermeye başlayabilirsiniz. Bu işlem genellikle 1-2 iş günü sürer.');
 
@@ -227,10 +187,10 @@ export default function EmployerProfilePage() {
 
   const handleUpdateApplicationStatus = async (applicationId: string, newStatus: string) => {
     try {
-      await supabase
-        .from('applications')
-        .update({ status: newStatus })
-        .eq('id', applicationId);
+      await api(`/api/applications/${applicationId}`, {
+        method: 'PATCH',
+        body: { status: newStatus },
+      });
 
       setSelectedJobApplications((prev) =>
         prev.map((a) => (a.id === applicationId ? { ...a, status: newStatus } : a))
@@ -254,67 +214,74 @@ export default function EmployerProfilePage() {
       return;
     }
     const expires = new Date(Date.now() + credit.durationDays * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase
-      .from('jobs')
-      .update({
-        expires_at: expires,
-        status: 'active',
-        featured: credit.featured,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', jobId)
-      .eq('employer_id', user.id);
-    if (error) {
-      setJobActionMsg(error.message);
-      return;
+    try {
+      await api(`/api/jobs/${jobId}`, {
+        method: 'PATCH',
+        body: {
+          expires_at: expires,
+          status: 'active',
+          featured: credit.featured,
+        },
+      });
+      setMyJobs((prev) =>
+        prev.map((j) =>
+          j.id === jobId ? { ...j, expires_at: expires, status: 'active', featured: credit.featured } : j
+        )
+      );
+      setJobActionMsg(`İlan ${credit.durationDays} gün uzatıldı.`);
+    } catch (err) {
+      setJobActionMsg(err instanceof Error ? err.message : 'Yenileme başarısız');
     }
-    setMyJobs((prev) =>
-      prev.map((j) =>
-        j.id === jobId ? { ...j, expires_at: expires, status: 'active', featured: credit.featured } : j
-      )
-    );
-    setJobActionMsg(`İlan ${credit.durationDays} gün uzatıldı.`);
   };
 
   const handleCloseJob = async (jobId: string) => {
     if (!user) return;
-    const { error } = await supabase
-      .from('jobs')
-      .update({ status: 'closed', updated_at: new Date().toISOString() })
-      .eq('id', jobId)
-      .eq('employer_id', user.id);
-    if (error) {
-      setJobActionMsg(error.message);
-      return;
+    try {
+      await api(`/api/jobs/${jobId}`, {
+        method: 'PATCH',
+        body: { status: 'closed' },
+      });
+      setMyJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: 'closed' } : j)));
+    } catch (err) {
+      setJobActionMsg(err instanceof Error ? err.message : 'Kapatma başarısız');
     }
-    setMyJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: 'closed' } : j)));
   };
 
   const handleDownloadLastInvoice = async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from('job_payments')
-      .select('*')
-      .eq('employer_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!data) {
+    try {
+      const rows = await api<{
+        id: string;
+        package_name: string;
+        amount: number;
+        buyer_name: string | null;
+        buyer_email: string | null;
+        company_name: string | null;
+        tax_id: string | null;
+        billing_address: string | null;
+        created_at: string;
+        status: string;
+      }[]>('/api/payments');
+      const data = rows?.[0];
+      if (!data) {
+        setJobActionMsg('İndirilecek fatura kaydı bulunamadı.');
+        return;
+      }
+      downloadInvoicePdf({
+        id: data.id,
+        packageName: data.package_name,
+        amount: data.amount,
+        buyerName: data.buyer_name,
+        buyerEmail: data.buyer_email,
+        companyName: data.company_name,
+        taxId: data.tax_id,
+        billingAddress: data.billing_address,
+        createdAt: data.created_at,
+        status: data.status,
+      });
+    } catch {
       setJobActionMsg('İndirilecek fatura kaydı bulunamadı.');
-      return;
     }
-    downloadInvoicePdf({
-      id: data.id,
-      packageName: data.package_name,
-      amount: data.amount,
-      buyerName: data.buyer_name,
-      buyerEmail: data.buyer_email,
-      companyName: data.company_name,
-      taxId: data.tax_id,
-      billingAddress: data.billing_address,
-      createdAt: data.created_at,
-      status: data.status,
-    });
   };
 
   const statusLabels: Record<string, string> = {

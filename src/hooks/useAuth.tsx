@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import supabase from '@/lib/supabase';
-import type { Session, User } from '@supabase/supabase-js';
+import { api, getToken, setToken, isApiConfigured } from '@/lib/api';
 
-interface Profile {
+export interface Profile {
   id: string;
+  email?: string;
   role: 'candidate' | 'employer' | 'admin';
   full_name: string | null;
   company_name: string | null;
@@ -20,8 +20,8 @@ interface Profile {
 }
 
 interface AuthState {
-  user: User | null;
-  session: Session | null;
+  user: Profile | null;
+  session: { access_token: string } | null;
   profile: Profile | null;
   loading: boolean;
   error: string | null;
@@ -45,71 +45,53 @@ interface AuthState {
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<Profile | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [session, setSession] = useState<{ access_token: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProfile = useCallback(async (userId: string) => {
+  const refreshProfile = useCallback(async () => {
+    if (!isApiConfigured || !getToken()) {
+      setUser(null);
+      setProfile(null);
+      setSession(null);
+      return;
+    }
     try {
-      const { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (fetchError) throw fetchError;
-      setProfile(data as Profile | null);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Profil yüklenemedi');
+      const data = await api<{ user: Profile; profile: Profile }>('/api/auth/me');
+      setUser(data.user);
+      setProfile(data.profile);
+      setSession({ access_token: getToken()! });
+    } catch {
+      setToken(null);
+      setUser(null);
+      setProfile(null);
+      setSession(null);
     }
   }, []);
 
-  const refreshProfile = useCallback(async () => {
-    if (user) {
-      await fetchProfile(user.id);
-    }
-  }, [user, fetchProfile]);
-
   useEffect(() => {
-    setLoading(true);
-
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      if (currentSession?.user) {
-        fetchProfile(currentSession.user.id).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
-    });
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      if (currentSession?.user) {
-        fetchProfile(currentSession.user.id);
-      } else {
-        setProfile(null);
-      }
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, [fetchProfile]);
+    (async () => {
+      setLoading(true);
+      await refreshProfile();
+      setLoading(false);
+    })();
+  }, [refreshProfile]);
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) {
-        return { success: false, error: signInError.message };
-      }
+      const data = await api<{ token: string; user: Profile; profile: Profile }>('/api/auth/login', {
+        body: { email, password },
+        auth: false,
+      });
+      setToken(data.token);
+      setUser(data.user);
+      setProfile(data.profile);
+      setSession({ access_token: data.token });
       return { success: true };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Giriş başarısız' };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : 'Giriş başarısız' };
     }
   };
 
@@ -124,93 +106,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     vergiNumarasi?: string;
   }) => {
     try {
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: {
-            role: data.role,
-            full_name: data.fullName,
-            phone: data.phone || null,
-            city: data.city || null,
-            company_name: data.role === 'employer' ? data.companyName : null,
-          },
+      const res = await api<{ token: string; user: Profile; profile: Profile }>('/api/auth/register', {
+        body: {
+          email: data.email,
+          password: data.password,
+          role: data.role,
+          full_name: data.fullName,
+          phone: data.phone,
+          city: data.city,
+          company_name: data.companyName,
+          vergi_numarasi: data.vergiNumarasi,
         },
+        auth: false,
       });
-
-      if (signUpError) {
-        return { success: false, error: signUpError.message };
-      }
-
-      if (authData.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: authData.user.id,
-            role: data.role,
-            full_name: data.fullName,
-            phone: data.phone || null,
-            city: data.city || null,
-            company_name: data.role === 'employer' ? data.companyName : null,
-            vergi_numarasi: data.role === 'employer' ? data.vergiNumarasi || null : null,
-            dogrulama_durumu: data.role === 'employer' && data.vergiNumarasi ? 'pending' : 'unverified',
-            dogrulama_talebi_tarihi: data.role === 'employer' && data.vergiNumarasi ? new Date().toISOString() : null,
-          });
-
-        if (profileError) {
-          return { success: false, error: profileError.message };
-        }
-      }
-
+      setToken(res.token);
+      setUser(res.user);
+      setProfile(res.profile);
+      setSession({ access_token: res.token });
       return { success: true };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Kayıt başarısız' };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : 'Kayıt başarısız' };
     }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    setToken(null);
+    setUser(null);
     setProfile(null);
-  };
-
-  const signInWithGoogle = async () => {
-    try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/`,
-        },
-      });
-      if (oauthError) {
-        return { success: false, error: oauthError.message };
-      }
-      return { success: true };
-    } catch (err) {
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : 'Google ile giriş başarısız',
-      };
-    }
+    setSession(null);
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
     try {
-      if (!user) return { success: false, error: 'Kullanıcı bulunamadı' };
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', user.id);
-
-      if (updateError) {
-        return { success: false, error: updateError.message };
-      }
-
-      await refreshProfile();
+      const data = await api<{ profile: Profile }>('/api/auth/profile', {
+        method: 'PATCH',
+        body: updates,
+      });
+      setProfile(data.profile);
+      setUser(data.profile);
       return { success: true };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Güncelleme başarısız' };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : 'Güncelleme başarısız' };
     }
   };
+
+  const signInWithGoogle = async () => ({
+    success: false,
+    error: 'Google girişi MySQL API aşamasında kapalı. E-posta ile giriş kullanın.',
+  });
 
   return (
     <AuthContext.Provider
@@ -234,9 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
+  return ctx;
 }

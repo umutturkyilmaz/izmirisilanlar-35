@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -11,6 +11,9 @@ interface ApplicationRow {
   cv_url: string | null;
   status: string;
   created_at: string;
+  job_title?: string;
+  candidate_name?: string;
+  company_name?: string;
 }
 
 interface JobRow {
@@ -103,22 +106,15 @@ export default function DashboardSection() {
       setLoading(true);
       setError(null);
 
-      const [appsRes, jobsRes, profilesRes] = await Promise.all([
-        supabase.from('applications').select('*').order('created_at', { ascending: false }),
-        supabase.from('jobs').select('*'),
-        supabase.from('profiles').select('id, role, full_name, company_name, city'),
+      const [stats, appsData, jobsData, profilesData] = await Promise.all([
+        api<{ jobs: number; applications: number; employers: number; candidates: number }>('/api/admin/stats'),
+        api<ApplicationRow[]>('/api/applications/employer'),
+        api<JobRow[]>('/api/jobs?limit=200'),
+        api<ProfileRow[]>('/api/admin/users'),
       ]);
 
-      if (appsRes.error) throw appsRes.error;
-      if (jobsRes.error) throw jobsRes.error;
-      if (profilesRes.error) throw profilesRes.error;
-
-      const appsData: ApplicationRow[] = appsRes.data || [];
-      const jobsData: JobRow[] = jobsRes.data || [];
-      const profilesData: ProfileRow[] = profilesRes.data || [];
-
-      setApplications(appsData);
-      setJobs(jobsData);
+      setApplications(appsData || []);
+      setJobs(jobsData || []);
 
       // --- Summary ---
       const now = new Date();
@@ -127,15 +123,15 @@ export default function DashboardSection() {
       const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
       setSummary({
-        totalJobs: jobsData.length,
-        totalApps: appsData.length,
-        totalEmployers: profilesData.filter((p) => p.role === 'employer').length,
-        totalCandidates: profilesData.filter((p) => p.role === 'candidate').length,
-        activeJobs: jobsData.filter((j) => j.status === 'active').length,
-        pendingJobs: jobsData.filter((j) => j.status === 'pending').length,
-        todayApps: appsData.filter((a) => a.created_at >= todayStart).length,
-        weekApps: appsData.filter((a) => a.created_at >= weekAgo).length,
-        monthApps: appsData.filter((a) => a.created_at >= monthAgo).length,
+        totalJobs: stats.jobs ?? (jobsData || []).length,
+        totalApps: stats.applications ?? (appsData || []).length,
+        totalEmployers: stats.employers ?? (profilesData || []).filter((p) => p.role === 'employer').length,
+        totalCandidates: stats.candidates ?? (profilesData || []).filter((p) => p.role === 'candidate').length,
+        activeJobs: (jobsData || []).filter((j) => j.status === 'active').length,
+        pendingJobs: (jobsData || []).filter((j) => j.status === 'pending').length,
+        todayApps: (appsData || []).filter((a) => a.created_at >= todayStart).length,
+        weekApps: (appsData || []).filter((a) => a.created_at >= weekAgo).length,
+        monthApps: (appsData || []).filter((a) => a.created_at >= monthAgo).length,
       });
 
       // --- Daily Applications (last 30 days) ---
@@ -145,7 +141,7 @@ export default function DashboardSection() {
         const key = `${d.getDate()}/${d.getMonth() + 1}`;
         dailyMap[key] = 0;
       }
-      appsData.forEach((a) => {
+      (appsData || []).forEach((a) => {
         const d = new Date(a.created_at);
         const key = `${d.getDate()}/${d.getMonth() + 1}`;
         if (dailyMap[key] !== undefined) dailyMap[key]++;
@@ -155,7 +151,7 @@ export default function DashboardSection() {
 
       // --- Sector Distribution (from jobs) ---
       const sectorMap: Record<string, number> = {};
-      jobsData.forEach((j) => {
+      (jobsData || []).forEach((j) => {
         const s = j.sector || 'Diğer';
         sectorMap[s] = (sectorMap[s] || 0) + 1;
       });
@@ -167,7 +163,7 @@ export default function DashboardSection() {
 
       // --- City Distribution (from jobs) ---
       const cityMap: Record<string, number> = {};
-      jobsData.forEach((j) => {
+      (jobsData || []).forEach((j) => {
         const c = j.city || 'Belirtilmemiş';
         cityMap[c] = (cityMap[c] || 0) + 1;
       });
@@ -179,7 +175,7 @@ export default function DashboardSection() {
 
       // --- Application Status Distribution ---
       const statusMap: Record<string, number> = {};
-      appsData.forEach((a) => {
+      (appsData || []).forEach((a) => {
         const s = a.status || 'pending';
         statusMap[s] = (statusMap[s] || 0) + 1;
       });
@@ -187,16 +183,14 @@ export default function DashboardSection() {
       setStatusDist(statusArr);
 
       // --- Recent Applications (last 10) ---
-      const profilesMap: Record<string, ProfileRow> = {};
-      profilesData.forEach((p) => { profilesMap[p.id] = p; });
       const jobsMap: Record<string, JobRow> = {};
-      jobsData.forEach((j) => { jobsMap[j.id] = j; });
+      (jobsData || []).forEach((j) => { jobsMap[j.id] = j; });
 
-      const recent: RecentApp[] = appsData.slice(0, 10).map((a) => ({
+      const recent: RecentApp[] = (appsData || []).slice(0, 10).map((a) => ({
         id: a.id,
-        candidate_name: profilesMap[a.candidate_id]?.full_name || 'Bilinmiyor',
-        job_title: jobsMap[a.job_id]?.title || 'Silinmiş İlan',
-        company_name: jobsMap[a.job_id]?.company_name || '—',
+        candidate_name: a.candidate_name || 'Bilinmiyor',
+        job_title: a.job_title || jobsMap[a.job_id]?.title || 'Silinmiş İlan',
+        company_name: a.company_name || jobsMap[a.job_id]?.company_name || '—',
         status: a.status,
         created_at: a.created_at,
       }));

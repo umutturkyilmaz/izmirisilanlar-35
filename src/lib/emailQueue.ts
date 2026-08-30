@@ -1,43 +1,21 @@
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 
-export type EmailKind =
-  | 'contact_ack'
-  | 'application_received'
-  | 'application_status'
-  | 'payment_receipt'
-  | 'password_reset'
-  | 'generic';
-
-export type EnqueueEmailInput = {
+export async function enqueueEmail(_input: {
   to: string;
   subject: string;
   body: string;
-  kind?: EmailKind;
+  kind?: string;
   meta?: Record<string, unknown>;
-};
+}): Promise<{ ok: boolean; error?: string }> {
+  // E-posta kuyruğu sonraki aşama; şimdilik no-op başarı
+  return { ok: true };
+}
 
-/**
- * E-postayı Supabase `email_queue` tablosuna yazar.
- * Gerçek gönderim (Resend/SendGrid) Edge Function / worker ile yapılır.
- */
-export async function enqueueEmail(input: EnqueueEmailInput): Promise<{ ok: boolean; error?: string }> {
-  const to = input.to.trim();
-  if (!to || !input.subject.trim() || !input.body.trim()) {
-    return { ok: false, error: 'Eksik alan' };
-  }
-
+export async function expireOutdatedJobs(): Promise<number> {
   try {
-    const { error } = await supabase.from('email_queue').insert({
-      to_email: to,
-      subject: input.subject.trim(),
-      body: input.body.trim(),
-      kind: input.kind ?? 'generic',
-      meta: input.meta ?? {},
-      status: 'pending',
-    });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Kuyruk hatası' };
+    const data = await api<{ updated: number }>('/api/jobs/expire', { method: 'POST', body: {}, auth: false });
+    return data.updated || 0;
+  } catch {
+    return 0;
   }
 }

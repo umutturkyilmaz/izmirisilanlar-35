@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 import DashboardSection from '@/pages/admin/components/DashboardSection';
 import PaymentsSection from '@/pages/admin/components/PaymentsSection';
 
@@ -73,14 +73,8 @@ export default function AdminPage() {
     try {
       setEmpLoading(true);
       setEmpError(null);
-      const { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('role', 'employer')
-        .order('created_at', { ascending: false });
-
-      if (fetchError) throw fetchError;
-      setEmployers((data as EmployerProfile[]) || []);
+      const data = await api<EmployerProfile[]>('/api/admin/users');
+      setEmployers((data || []).filter((u) => u.role === 'employer'));
     } catch (err) {
       setEmpError(err instanceof Error ? err.message : 'Veriler yüklenemedi');
     } finally {
@@ -92,28 +86,17 @@ export default function AdminPage() {
     try {
       setJobLoading(true);
       setJobError(null);
-      const { data: jobsData, error: jobsError } = await supabase
-        .from('jobs')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [jobsData, users] = await Promise.all([
+        api<any[]>('/api/jobs?limit=200'),
+        api<{ id: string; full_name: string | null; vergi_numarasi: string | null }[]>('/api/admin/users'),
+      ]);
 
-      if (jobsError) throw jobsError;
+      const profilesMap: Record<string, { full_name: string | null; vergi_numarasi: string | null }> = {};
+      (users || []).forEach((p) => {
+        profilesMap[p.id] = p;
+      });
 
-      const jobList = jobsData || [];
-      const employerIds = [...new Set(jobList.map((j: any) => j.employer_id).filter(Boolean))];
-
-      let profilesMap: Record<string, any> = {};
-      if (employerIds.length > 0) {
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, full_name, vergi_numarasi')
-          .in('id', employerIds);
-        if (profilesData) {
-          profilesData.forEach((p: any) => { profilesMap[p.id] = p; });
-        }
-      }
-
-      const enriched: JobWithEmployer[] = jobList.map((j: any) => ({
+      const enriched: JobWithEmployer[] = (jobsData || []).map((j: any) => ({
         ...j,
         employer_full_name: profilesMap[j.employer_id]?.full_name || null,
         employer_vergi: profilesMap[j.employer_id]?.vergi_numarasi || null,
@@ -139,11 +122,10 @@ export default function AdminPage() {
     setEmpActionLoading(employerId);
     setEmpActionMsg(null);
     try {
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ dogrulama_durumu: 'verified', dogrulanma_tarihi: new Date().toISOString() })
-        .eq('id', employerId);
-      if (updateError) throw updateError;
+      await api(`/api/admin/users/${employerId}`, {
+        method: 'PATCH',
+        body: { dogrulama_durumu: 'verified' },
+      });
       setEmpActionMsg({ type: 'success', text: 'İşveren başarıyla onaylandı.' });
       await fetchEmployers();
     } catch (err) {
@@ -157,11 +139,10 @@ export default function AdminPage() {
     setEmpActionLoading(employerId);
     setEmpActionMsg(null);
     try {
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ dogrulama_durumu: 'rejected', dogrulanma_tarihi: new Date().toISOString() })
-        .eq('id', employerId);
-      if (updateError) throw updateError;
+      await api(`/api/admin/users/${employerId}`, {
+        method: 'PATCH',
+        body: { dogrulama_durumu: 'rejected' },
+      });
       setEmpActionMsg({ type: 'success', text: 'İşveren başvurusu reddedildi.' });
       await fetchEmployers();
     } catch (err) {
@@ -176,11 +157,7 @@ export default function AdminPage() {
     setJobActionLoading(jobId);
     setJobActionMsg(null);
     try {
-      const { error: updateError } = await supabase
-        .from('jobs')
-        .update({ status: 'active', updated_at: new Date().toISOString() })
-        .eq('id', jobId);
-      if (updateError) throw updateError;
+      await api(`/api/jobs/${jobId}`, { method: 'PATCH', body: { status: 'active' } });
       setJobActionMsg({ type: 'success', text: 'İlan başarıyla onaylandı ve yayına alındı.' });
       await fetchJobs();
     } catch (err) {
@@ -194,11 +171,7 @@ export default function AdminPage() {
     setJobActionLoading(jobId);
     setJobActionMsg(null);
     try {
-      const { error: updateError } = await supabase
-        .from('jobs')
-        .update({ status: 'rejected', updated_at: new Date().toISOString() })
-        .eq('id', jobId);
-      if (updateError) throw updateError;
+      await api(`/api/jobs/${jobId}`, { method: 'PATCH', body: { status: 'rejected' } });
       setJobActionMsg({ type: 'success', text: 'İlan reddedildi.' });
       await fetchJobs();
     } catch (err) {
@@ -212,11 +185,7 @@ export default function AdminPage() {
     setJobActionLoading(jobId);
     setJobActionMsg(null);
     try {
-      const { error: updateError } = await supabase
-        .from('jobs')
-        .update({ status: 'closed', updated_at: new Date().toISOString() })
-        .eq('id', jobId);
-      if (updateError) throw updateError;
+      await api(`/api/jobs/${jobId}`, { method: 'PATCH', body: { status: 'closed' } });
       setJobActionMsg({ type: 'success', text: 'İlan kapatıldı.' });
       await fetchJobs();
     } catch (err) {

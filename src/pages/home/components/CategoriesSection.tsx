@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 interface Category {
   id: number;
@@ -18,11 +18,7 @@ export default function CategoriesSection() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const { data } = await supabase
-          .from('job_categories')
-          .select('*')
-          .order('sort_order', { ascending: true });
-
+        const data = await api<Category[]>('/api/categories', { auth: false });
         if (data) setCategories(data);
       } catch {
         // silent fail, keep empty

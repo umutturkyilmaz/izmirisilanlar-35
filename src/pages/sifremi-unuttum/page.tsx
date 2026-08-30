@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -14,12 +14,14 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     setMsg(null);
     try {
-      const redirectTo = `${window.location.origin}/giris`;
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
-      if (error) throw error;
+      const data = await api<{ ok: boolean; message?: string }>('/api/auth/forgot-password', {
+        method: 'POST',
+        body: { email: email.trim() },
+        auth: false,
+      });
       setMsg({
         type: 'ok',
-        text: 'Şifre sıfırlama bağlantısı e-posta adresinize gönderildi. Gelen kutusu ve spam klasörünü kontrol edin.',
+        text: data.message || 'Şifre sıfırlama bağlantısı e-posta adresinize gönderildi. Gelen kutusu ve spam klasörünü kontrol edin.',
       });
     } catch (err) {
       setMsg({

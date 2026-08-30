@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 interface ApplicationFull {
   id: string;
@@ -48,64 +48,14 @@ export default function ApplicationsSection({ employerId }: ApplicationsSectionP
     setLoading(true);
     setError(null);
     try {
-      const { data: myJobs, error: jobsError } = await supabase
-        .from('jobs')
-        .select('id')
-        .eq('employer_id', employerId);
-
-      if (jobsError) throw jobsError;
-
-      const jobIds = (myJobs || []).map((j: any) => j.id);
-      if (jobIds.length === 0) {
-        setApplications([]);
-        setLoading(false);
-        return;
-      }
-
-      const { data: apps, error: appsError } = await supabase
-        .from('applications')
-        .select('id, job_id, candidate_id, status, cover_letter, created_at')
-        .in('job_id', jobIds)
-        .order('created_at', { ascending: false });
-
-      if (appsError) throw appsError;
-
-      interface JobTitleRow { id: string; title: string; }
-      interface ProfileRow { id: string; full_name: string | null; }
-
-      const uniqueJobIds = [...new Set((apps || []).map((a: any) => a.job_id))];
-      const uniqueCandidateIds = [...new Set((apps || []).map((a: any) => a.candidate_id))];
-
-      let jobsMap: Record<string, string> = {};
-      if (uniqueJobIds.length > 0) {
-        const { data: jobsData } = await supabase
-          .from('jobs')
-          .select('id, title')
-          .in('id', uniqueJobIds);
-        (jobsData || []).forEach((j: JobTitleRow) => { jobsMap[j.id] = j.title; });
-      }
-
-      let profilesMap: Record<string, string> = {};
-      if (uniqueCandidateIds.length > 0) {
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', uniqueCandidateIds);
-        (profilesData || []).forEach((p: ProfileRow) => { profilesMap[p.id] = p.full_name || 'Anonim'; });
-      }
-
-      const mapped: ApplicationFull[] = (apps || []).map((a: any) => ({
-        id: a.id,
-        job_id: a.job_id,
-        candidate_id: a.candidate_id,
-        status: a.status,
-        cover_letter: a.cover_letter,
-        created_at: a.created_at,
-        job_title: jobsMap[a.job_id] || '',
-        candidate_name: profilesMap[a.candidate_id] || 'Anonim',
-      }));
-
-      setApplications(mapped);
+      const apps = await api<ApplicationFull[]>('/api/applications/employer');
+      setApplications(
+        (apps || []).map((a) => ({
+          ...a,
+          job_title: a.job_title || '',
+          candidate_name: a.candidate_name || 'Anonim',
+        })),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Başvurular yüklenemedi');
     } finally {
@@ -120,12 +70,7 @@ export default function ApplicationsSection({ employerId }: ApplicationsSectionP
   const handleUpdateStatus = async (appId: string, newStatus: string) => {
     setUpdatingId(appId);
     try {
-      const { error: updateError } = await supabase
-        .from('applications')
-        .update({ status: newStatus })
-        .eq('id', appId);
-      if (updateError) throw updateError;
-
+      await api(`/api/applications/${appId}`, { method: 'PATCH', body: { status: newStatus } });
       setApplications((prev) =>
         prev.map((a) => (a.id === appId ? { ...a, status: newStatus } : a))
       );
@@ -149,11 +94,9 @@ export default function ApplicationsSection({ employerId }: ApplicationsSectionP
 
     try {
       const ids = Array.from(selectedIds);
-      const { error: updateError } = await supabase
-        .from('applications')
-        .update({ status: newStatus })
-        .in('id', ids);
-      if (updateError) throw updateError;
+      await Promise.all(
+        ids.map((id) => api(`/api/applications/${id}`, { method: 'PATCH', body: { status: newStatus } })),
+      );
 
       setApplications((prev) =>
         prev.map((a) => (selectedIds.has(a.id) ? { ...a, status: newStatus } : a))

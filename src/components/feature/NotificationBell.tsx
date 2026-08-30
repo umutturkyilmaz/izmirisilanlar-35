@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { fetchNotifications, markNotificationRead } from '@/lib/notifications';
+import { listNotifications, markNotificationRead } from '@/lib/notifications';
 
 type Note = {
   id: string;
@@ -19,7 +19,7 @@ export default function NotificationBell() {
 
   useEffect(() => {
     if (!user) return;
-    fetchNotifications(user.id).then((data) => setItems(data as Note[]));
+    listNotifications(user.id).then((data) => setItems(data as Note[]));
   }, [user, open]);
 
   if (!user) return null;

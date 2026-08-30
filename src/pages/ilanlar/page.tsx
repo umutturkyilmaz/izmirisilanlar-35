@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { ASSETS } from '@/lib/assets';
 
 interface Job {
@@ -94,57 +94,50 @@ export default function JobListingsPage() {
     setLoading(true);
     setError(null);
     try {
-      let query = supabase
-        .from('jobs')
-        .select('*')
-        .eq('status', 'active');
+      const params = new URLSearchParams({ status: 'active', limit: '200' });
+      if (searchQuery.trim()) params.set('q', searchQuery.trim());
+      if (selectedCity) params.set('city', selectedCity);
+      if (selectedSector) params.set('sector', selectedSector);
+      if (selectedType) params.set('job_type', selectedType);
 
-      // Search
-      if (searchQuery.trim()) {
-        query = query.or(`title.ilike.%${searchQuery.trim()}%,company_name.ilike.%${searchQuery.trim()}%,description.ilike.%${searchQuery.trim()}%`);
+      let list = await api<Job[]>(`/api/jobs?${params.toString()}`, { auth: false });
+
+      if (selectedExperience) {
+        list = list.filter((j) => j.experience_level === selectedExperience);
       }
-
-      // Filters
-      if (selectedCity) query = query.eq('city', selectedCity);
-      if (selectedSector) query = query.eq('sector', selectedSector);
-      if (selectedType) query = query.eq('job_type', selectedType);
-      if (selectedExperience) query = query.eq('experience_level', selectedExperience);
-
-      // Salary range
-      if (salaryMin) query = query.gte('salary_max', parseInt(salaryMin, 10));
-      if (salaryMax) query = query.lte('salary_min', parseInt(salaryMax, 10));
-
-      // Posted within
+      if (salaryMin) {
+        const min = parseInt(salaryMin, 10);
+        list = list.filter((j) => j.salary_max != null && j.salary_max >= min);
+      }
+      if (salaryMax) {
+        const max = parseInt(salaryMax, 10);
+        list = list.filter((j) => j.salary_min != null && j.salary_min <= max);
+      }
       if (postedWithin) {
-        const now = new Date();
-        let since: Date;
-        if (postedWithin === '24h') since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        else if (postedWithin === '7d') since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        else since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        query = query.gte('created_at', since.toISOString());
+        const now = Date.now();
+        const ms =
+          postedWithin === '24h' ? 24 * 60 * 60 * 1000 :
+          postedWithin === '7d' ? 7 * 24 * 60 * 60 * 1000 :
+          30 * 24 * 60 * 60 * 1000;
+        const since = now - ms;
+        list = list.filter((j) => new Date(j.created_at).getTime() >= since);
       }
 
-      // Sorting
       switch (sortBy) {
-        case 'newest':
-          query = query.order('created_at', { ascending: false });
-          break;
         case 'oldest':
-          query = query.order('created_at', { ascending: true });
+          list = [...list].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
           break;
         case 'salary-asc':
-          query = query.order('salary_min', { ascending: true, nullsFirst: false });
+          list = [...list].sort((a, b) => (a.salary_min ?? Infinity) - (b.salary_min ?? Infinity));
           break;
         case 'salary-desc':
-          query = query.order('salary_max', { ascending: false, nullsFirst: false });
+          list = [...list].sort((a, b) => (b.salary_max ?? -Infinity) - (a.salary_max ?? -Infinity));
           break;
         default:
-          query = query.order('created_at', { ascending: false });
+          list = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       }
 
-      const { data, error: fetchError } = await query;
-      if (fetchError) throw fetchError;
-      setJobs((data as Job[]) || []);
+      setJobs(list);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'İlanlar yüklenemedi');
     } finally {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { ASSETS } from '@/lib/assets';
 
 const HERO_BG = ASSETS.heroBg;
@@ -16,21 +16,10 @@ export default function HeroSection() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const { count: jobCount } = await supabase
-          .from('jobs')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'active');
-
-        const { data: companies } = await supabase
-          .from('jobs')
-          .select('company_name')
-          .eq('status', 'active');
-
-        const uniqueCompanies = companies ? new Set(companies.map((c) => c.company_name)).size : 0;
-
+        const data = await api<{ activeJobs: number; companies: number }>('/api/jobs/stats', { auth: false });
         setStats({
-          activeJobs: jobCount || 12543,
-          companies: uniqueCompanies || 2847,
+          activeJobs: data.activeJobs || 12543,
+          companies: data.companies || 2847,
           candidates: 56720,
           successfulApplications: 8934,
         });

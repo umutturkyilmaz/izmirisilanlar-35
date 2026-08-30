@@ -1,70 +1,60 @@
-# Manuel kurulum — Supabase + Railway (iyzico hariç)
+# MySQL + API (Supabase / PocketBase yok)
 
-## Mimari (karıştırma)
-- **Railway** = site (React). Supabase Railway’e “kurulmaz”.
-- **Supabase** = auth + Postgres + storage (`*.supabase.co`).
+## Mimari
+1. **MySQL** (Railway plugin) — veri
+2. **API** (`server/`) — Express, auth, upload
+3. **Web** (mevcut Vite) — `VITE_PUBLIC_API_URL`
 
----
+Tarayıcı MySQL’e doğrudan bağlanmaz.
 
-## A) Benim hazırladığım (repoda hazır)
-1. `supabase/full-setup.sql` — boş proje için **tek sefer** SQL (tablolar + RLS + storage + kategoriler)
-2. Railway Variables isimleri aşağıda
-3. Auth URL listesi aşağıda
+## Railway kurulum (test)
+1. PocketBase / Supabase şablon servislerini **sil**
+2. Project → **New** → **Database** → **MySQL**
+3. New service → GitHub repo aynı → **Root Directory: `server`**
+   - Start: `npm start`
+   - Variables: MySQL’den referansla `MYSQLHOST`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`, `MYSQLPORT`
+     veya tek `DATABASE_URL`
+   - `JWT_SECRET` = uzun rastgele metin
+   - `PUBLIC_API_URL` = API’nin public domain’i (Generate Domain sonrası)
+4. MySQL’e `server/schema.sql` çalıştır (Query / TablePlus / mysql client)
+5. API → Networking → **Generate Domain** → örn. `https://xxx.up.railway.app`
+6. **izmirisilanlar-35** (web) Variables:
+   ```
+   VITE_PUBLIC_API_URL=https://xxx.up.railway.app
+   VITE_PUBLIC_SITE_URL=https://izmirisilanlari35.com
+   ```
+7. Web **Redeploy**
 
-## B) Senin yapman gereken (hesap sende)
-
-### 1) Supabase proje
-1. https://supabase.com → Sign in (umutata355 / site sahibi Gmail)
-2. **New project** → isim: `izmir-is-ilanlari-35` → region: Frankfurt (veya yakın) → Create
-3. Proje açılınca **SQL Editor** → New query  
-4. Bilgisayardan aç:  
-   `C:\Users\Teknogenetik\Downloads\İzmirişilanları35\supabase\full-setup.sql`  
-   Tümünü kopyala → yapıştır → **Run** (Success olmalı)
-
-### 2) API anahtarları
-**Project Settings → API**
-- Project URL → `VITE_PUBLIC_SUPABASE_URL`
-- `anon` `public` key → `VITE_PUBLIC_SUPABASE_ANON_KEY`
-
-### 3) Auth URL
-**Authentication → URL Configuration**
-- Site URL: `https://izmirisilanlari35.com`
-- Redirect URLs ekle:
-  - `https://izmirisilanlari35.com/**`
-  - `https://www.izmirisilanlari35.com/**`
-  - `http://localhost:3000/**`
-
-### 4) Railway Variables + Redeploy
-Service → **Variables** → ekle (Suggested’daki placeholder’ı kullanma):
-
-```
-VITE_PUBLIC_SUPABASE_URL=https://XXXX.supabase.co
-VITE_PUBLIC_SUPABASE_ANON_KEY=eyJ....
-VITE_PUBLIC_SITE_URL=https://izmirisilanlari35.com
-```
-
-Sonra **Redeploy** (Vite build’de gömülür; değişince yeniden deploy şart).
-
-### 5) Admin (ilk kullanıcıdan sonra)
-SQL Editor:
+## İlk admin
+Kayıt ol (employer veya candidate) → MySQL:
 
 ```sql
-update public.profiles
-set role = 'admin'
-where id = '<senin-user-uuid>';
+UPDATE users SET role = 'admin' WHERE email = 'senin@email.com';
 ```
 
-UUID: Authentication → Users.
-
----
-
 ## Kontrol
-1. https://izmirisilanlari35.com açılıyor  
-2. Kayıt ol → giriş  
-3. Ana sayfa / ilanlar boş liste (DB bağlı, veri yok) — hata yok  
-4. İletişim formu kayıt düşüyor (`contact_messages`)
+- `GET https://API/api/health` → `{"ok":true,"db":true}`
+- Sitede kayıt / giriş / ilan listesi
 
-## Ertelediğimiz
-- iyzico ödeme  
-- Google OAuth (isteğe bağlı)  
-- Gerçek e-posta gönderimi
+## iyzico (senin vereceğin bilgiler)
+
+Kod hazır. Anahtar yokken **test modu**: checkout → kredi anında (`mode: test`).
+
+Anahtarları **yalnızca API** servisine ekle (Vite / web’e asla koyma):
+
+```
+IYZICO_ENABLED=true
+IYZICO_API_KEY=...
+IYZICO_SECRET_KEY=...
+IYZICO_SANDBOX=true
+PUBLIC_API_URL=https://SENIN-API.up.railway.app
+PUBLIC_SITE_URL=https://izmirisilanlari35.com
+```
+
+Canlıya geçince: `IYZICO_SANDBOX=false` (veya `IYZICO_BASE_URL=https://api.iyzipay.com`).
+
+Akış: `/odeme` → API Checkout Form → iyzico → `POST /api/payments/iyzico/callback` → kredi → `/odeme/basarili`.
+
+Kontrol: `GET /api/payments/iyzico/status` → `{"enabled":true,...}`
+
+Merchant panel: sandbox-merchant.iyzipay.com / merchant.iyzipay.com — callback URL otomatik `PUBLIC_API_URL` ile üretilir.

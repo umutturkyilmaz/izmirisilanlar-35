@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { formatPrice } from '@/data/packages';
 import { downloadInvoicePdf } from '@/lib/invoice';
 
@@ -23,20 +23,13 @@ export default function PaymentsSection() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const { data, error: err } = await supabase
-        .from('job_payments')
-        .select('id, package_name, amount, currency, status, buyer_name, buyer_email, company_name, created_at')
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (err) {
-        setError(err.message.includes('does not exist') || err.code === '42P01'
-          ? 'job_payments tablosu henüz yok. supabase/schema.sql çalıştırın.'
-          : err.message);
-        setRows([]);
-      } else {
+      try {
+        const data = await api<PaymentRow[]>('/api/payments');
         setError(null);
-        setRows((data as PaymentRow[]) || []);
+        setRows(data || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Ödemeler yüklenemedi');
+        setRows([]);
       }
       setLoading(false);
     })();

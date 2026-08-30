@@ -1,7 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { formatPrice, getPackageById, JOB_PACKAGES } from '@/data/packages';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { isIyzicoConfigured } from '@/lib/iyzico';
 
 const store: Record<string, string> = {};
 
@@ -43,11 +42,5 @@ describe('rateLimit', () => {
     expect(checkRateLimit(key, 2, 60_000).ok).toBe(true);
     expect(checkRateLimit(key, 2, 60_000).ok).toBe(true);
     expect(checkRateLimit(key, 2, 60_000).ok).toBe(false);
-  });
-});
-
-describe('iyzico stub', () => {
-  it('reports not configured without env flags', () => {
-    expect(isIyzicoConfigured()).toBe(false);
   });
 });

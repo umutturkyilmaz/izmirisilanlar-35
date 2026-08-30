@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { enqueueEmail } from '@/lib/emailQueue';
 
@@ -42,34 +42,27 @@ export default function ContactPage() {
         return;
       }
 
-      const { error } = await supabase.from('contact_messages').insert({
-        name: formData.name.trim(),
-        email: formData.email.trim(),
-        subject: formData.subject.trim(),
-        message: formData.message.trim(),
+      await api('/api/contact', {
+        method: 'POST',
+        body: {
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          subject: formData.subject.trim(),
+          message: formData.message.trim(),
+        },
+        auth: false,
       });
 
-      if (error) {
-        // Tablo yoksa veya RLS: mailto yedek
-        const body = encodeURIComponent(
-          `Konu: ${formData.subject}\nGönderen: ${formData.name} <${formData.email}>\n\n${formData.message}`
-        );
-        window.location.href = `mailto:destek@izmirisilanlari35.com?subject=${encodeURIComponent(formData.subject)}&body=${body}`;
-        setStatus({
-          type: 'success',
-          text: 'E-posta uygulamanız açıldı. Gönderimi tamamlayın veya daha sonra tekrar deneyin.',
-        });
-      } else {
-        void enqueueEmail({
-          to: formData.email.trim(),
-          subject: `İletişim alındı: ${formData.subject.trim()}`,
-          body: `Merhaba ${formData.name.trim()},\n\nMesajınızı aldık. En kısa sürede dönüş yapacağız.\n\n— İzmir İş İlanları 35`,
-          kind: 'contact_ack',
-          meta: { source: 'contact_form' },
-        });
-        setStatus({ type: 'success', text: 'Mesajınız başarıyla gönderildi! En kısa sürede size dönüş yapacağız.' });
-        setFormData({ name: '', email: '', subject: '', message: '', phone_alt: '' });
-      }
+      void enqueueEmail({
+        to: formData.email.trim(),
+        subject: `İletişim alındı: ${formData.subject.trim()}`,
+        body: `Merhaba ${formData.name.trim()},\n\nMesajınızı aldık. En kısa sürede dönüş yapacağız.\n\n— İzmir İş İlanları 35`,
+        kind: 'contact_ack',
+        meta: { source: 'contact_form' },
+      });
+      setStatus({ type: 'success', text: 'Mesajınız başarıyla gönderildi! En kısa sürede size dönüş yapacağız.' });
+      setFormData({ name: '', email: '', subject: '', message: '', phone_alt: '' });
+
     } catch {
       setStatus({ type: 'error', text: 'Bağlantı hatası. Lütfen daha sonra tekrar deneyin.' });
     } finally {

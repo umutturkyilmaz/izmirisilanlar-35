@@ -3,7 +3,17 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
+
+type JobEdit = {
+  id: string;
+  title: string;
+  description: string;
+  city: string | null;
+  salary_min: number | null;
+  salary_max: number | null;
+  employer_id: string;
+};
 
 export default function EditJobPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,26 +33,22 @@ export default function EditJobPage() {
   useEffect(() => {
     if (!id || !user) return;
     (async () => {
-      const { data, error } = await supabase
-        .from('jobs')
-        .select('id, title, description, city, salary_min, salary_max, employer_id')
-        .eq('id', id)
-        .maybeSingle();
-      if (error || !data) {
+      try {
+        const data = await api<JobEdit>(`/api/jobs/${id}`);
+        if (data.employer_id !== user.id && profile?.role !== 'admin') {
+          setLoadErr('Bu ilanı düzenleme yetkiniz yok.');
+          return;
+        }
+        setForm({
+          title: data.title || '',
+          description: data.description || '',
+          city: data.city || '',
+          salary_min: data.salary_min != null ? String(data.salary_min) : '',
+          salary_max: data.salary_max != null ? String(data.salary_max) : '',
+        });
+      } catch {
         setLoadErr('İlan bulunamadı.');
-        return;
       }
-      if (data.employer_id !== user.id && profile?.role !== 'admin') {
-        setLoadErr('Bu ilanı düzenleme yetkiniz yok.');
-        return;
-      }
-      setForm({
-        title: data.title || '',
-        description: data.description || '',
-        city: data.city || '',
-        salary_min: data.salary_min != null ? String(data.salary_min) : '',
-        salary_max: data.salary_max != null ? String(data.salary_max) : '',
-      });
     })();
   }, [id, user, profile]);
 
@@ -55,25 +61,24 @@ export default function EditJobPage() {
     }
     setSaving(true);
     setMsg(null);
-    const { error } = await supabase
-      .from('jobs')
-      .update({
-        title: form.title.trim(),
-        description: form.description.trim(),
-        city: form.city.trim() || null,
-        salary_min: form.salary_min ? parseInt(form.salary_min, 10) : null,
-        salary_max: form.salary_max ? parseInt(form.salary_max, 10) : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .eq('employer_id', user.id);
-    setSaving(false);
-    if (error) {
-      setMsg(error.message);
-      return;
+    try {
+      await api(`/api/jobs/${id}`, {
+        method: 'PATCH',
+        body: {
+          title: form.title.trim(),
+          description: form.description.trim(),
+          city: form.city.trim() || null,
+          salary_min: form.salary_min ? parseInt(form.salary_min, 10) : null,
+          salary_max: form.salary_max ? parseInt(form.salary_max, 10) : null,
+        },
+      });
+      setMsg('İlan güncellendi.');
+      setTimeout(() => navigate('/profil/isveren'), 1200);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Güncelleme başarısız');
+    } finally {
+      setSaving(false);
     }
-    setMsg('İlan güncellendi.');
-    setTimeout(() => navigate('/profil/isveren'), 1200);
   };
 
   if (loading) {

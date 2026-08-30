@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { uploadUserFile } from '@/lib/storage';
 
 interface Application {
@@ -52,38 +52,16 @@ export default function CandidateProfilePage() {
     const fetchApplications = async () => {
       setAppsLoading(true);
       try {
-        const { data, error: fetchError } = await supabase
-          .from('applications')
-          .select('id, job_id, status, cover_letter, created_at, jobs:job_id(title, company_name, city, sector)')
-          .eq('candidate_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (fetchError) throw fetchError;
-
-        interface RawRow {
-          id: string;
-          job_id: string;
-          status: string;
-          cover_letter: string | null;
-          created_at: string;
-          jobs: { title: string; company_name: string; city: string; sector: string } | { title: string; company_name: string; city: string; sector: string }[];
-        }
-
-        const mapped: Application[] = (data as unknown as RawRow[]).map((row) => {
-          const job = Array.isArray(row.jobs) ? row.jobs[0] : row.jobs;
-          return {
-            id: row.id,
-            job_id: row.job_id,
-            status: row.status,
-            cover_letter: row.cover_letter,
-            created_at: row.created_at,
-            job_title: job?.title || 'Belirtilmemiş',
-            company_name: job?.company_name || '',
-            city: job?.city || '',
-            sector: job?.sector || '',
-          };
-        });
-        setApplications(mapped);
+        const data = await api<Application[]>('/api/applications/mine');
+        setApplications(
+          (data || []).map((row) => ({
+            ...row,
+            job_title: row.job_title || 'Belirtilmemiş',
+            company_name: row.company_name || '',
+            city: row.city || '',
+            sector: row.sector || '',
+          })),
+        );
       } catch {
         // silent fail
       } finally {

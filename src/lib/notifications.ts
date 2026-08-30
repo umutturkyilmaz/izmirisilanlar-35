@@ -1,4 +1,4 @@
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 export async function createNotification(input: {
   userId: string;
@@ -7,29 +7,33 @@ export async function createNotification(input: {
   link?: string;
 }) {
   try {
-    await supabase.from('notifications').insert({
-      user_id: input.userId,
-      title: input.title,
-      body: input.body,
-      link: input.link || null,
-      read: false,
+    await api('/api/notifications', {
+      body: {
+        user_id: input.userId,
+        title: input.title,
+        body: input.body,
+        link: input.link,
+      },
     });
   } catch {
-    /* tablo yoksa sessiz */
+    /* ignore */
   }
 }
 
-export async function fetchNotifications(userId: string, limit = 20) {
-  const { data, error } = await supabase
-    .from('notifications')
-    .select('id, title, body, link, read, created_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (error) return [];
-  return data || [];
+export async function listNotifications(_userId: string) {
+  try {
+    return await api<
+      { id: string; title: string; body: string; link: string | null; read: boolean; created_at: string }[]
+    >('/api/notifications');
+  } catch {
+    return [];
+  }
 }
 
 export async function markNotificationRead(id: string) {
-  await supabase.from('notifications').update({ read: true }).eq('id', id);
+  try {
+    await api(`/api/notifications/${id}/read`, { method: 'PATCH', body: {} });
+  } catch {
+    /* ignore */
+  }
 }

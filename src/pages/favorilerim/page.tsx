@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 
 interface FavoriteJob {
   id: string;
@@ -31,37 +31,8 @@ export default function FavoritesPage() {
     const fetchFavorites = async () => {
       setDataLoading(true);
       try {
-        interface FavRaw {
-          id: string;
-          job_id: string;
-          created_at: string;
-          jobs: { title: string; company_name: string; city: string; sector: string; job_type: string; salary_min: number | null; salary_max: number | null } | { title: string; company_name: string; city: string; sector: string; job_type: string; salary_min: number | null; salary_max: number | null }[];
-        }
-
-        const { data, error: fetchError } = await supabase
-          .from('favorites')
-          .select('id, job_id, created_at, jobs:job_id(title, company_name, city, sector, job_type, salary_min, salary_max)')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (fetchError) throw fetchError;
-
-        const mapped: FavoriteJob[] = (data as unknown as FavRaw[]).map((fav) => {
-          const job = Array.isArray(fav.jobs) ? fav.jobs[0] : fav.jobs;
-          return {
-            id: fav.id,
-            job_id: fav.job_id,
-            title: job?.title || '',
-            company_name: job?.company_name || '',
-            city: job?.city || '',
-            sector: job?.sector || '',
-            job_type: job?.job_type || '',
-            salary_min: job?.salary_min,
-            salary_max: job?.salary_max,
-            created_at: fav.created_at,
-          };
-        });
-        setFavorites(mapped);
+        const data = await api<FavoriteJob[]>('/api/favorites');
+        setFavorites(data || []);
       } catch {
         // silent
       } finally {
@@ -73,7 +44,7 @@ export default function FavoritesPage() {
 
   const handleRemoveFavorite = async (favoriteId: string) => {
     try {
-      await supabase.from('favorites').delete().eq('id', favoriteId);
+      await api(`/api/favorites/${favoriteId}`, { method: 'DELETE' });
       setFavorites((prev) => prev.filter((f) => f.id !== favoriteId));
     } catch {
       // silent

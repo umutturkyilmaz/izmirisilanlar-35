@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { uploadUserFile } from '@/lib/storage';
 import {
   fetchCredits,
@@ -60,13 +60,11 @@ export default function PostJobPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    supabase
-      .from('job_categories')
-      .select('id, name, icon')
-      .order('sort_order')
-      .then(({ data }) => {
+    api<{ id: number; name: string; icon: string }[]>('/api/categories', { auth: false })
+      .then((data) => {
         if (data) setCategories(data as JobCategory[]);
-      });
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -167,27 +165,26 @@ export default function PostJobPage() {
       const filteredBenefits = benefits.filter((b) => b.trim() !== '');
       const selectedCategory = categories.find((c) => c.id === formData.category_id);
 
-      const { error: insertError } = await supabase.from('jobs').insert({
-        employer_id: user.id,
-        title: formData.title.trim(),
-        category_id: formData.category_id,
-        sector: selectedCategory?.name || formData.sector || '',
-        description: formData.description.trim(),
-        company_name: formData.company_name.trim(),
-        city: formData.city.trim() || null,
-        job_type: formData.job_type,
-        experience_level: formData.experience_level,
-        salary_min: formData.salary_min ? parseInt(formData.salary_min, 10) : null,
-        salary_max: formData.salary_max ? parseInt(formData.salary_max, 10) : null,
-        requirements: filteredRequirements.length > 0 ? filteredRequirements : null,
-        benefits: filteredBenefits.length > 0 ? filteredBenefits : null,
-        image_url: imageUrl,
-        status: 'pending',
-        featured: credit.featured,
-        expires_at: new Date(Date.now() + credit.durationDays * 24 * 60 * 60 * 1000).toISOString(),
+      await api('/api/jobs', {
+        body: {
+          title: formData.title.trim(),
+          category_id: formData.category_id,
+          sector: selectedCategory?.name || formData.sector || '',
+          description: formData.description.trim(),
+          company_name: formData.company_name.trim(),
+          city: formData.city.trim() || null,
+          job_type: formData.job_type,
+          experience_level: formData.experience_level,
+          salary_min: formData.salary_min ? parseInt(formData.salary_min, 10) : null,
+          salary_max: formData.salary_max ? parseInt(formData.salary_max, 10) : null,
+          requirements: filteredRequirements.length > 0 ? filteredRequirements : null,
+          benefits: filteredBenefits.length > 0 ? filteredBenefits : null,
+          image_url: imageUrl,
+          status: 'pending',
+          featured: credit.featured,
+          expires_at: new Date(Date.now() + credit.durationDays * 24 * 60 * 60 * 1000).toISOString(),
+        },
       });
-
-      if (insertError) throw insertError;
 
       setSubmitResult({
         type: 'success',

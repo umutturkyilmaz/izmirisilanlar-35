@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
@@ -7,6 +7,7 @@ import { getPackageById, formatPrice, JOB_PACKAGES } from '@/data/packages';
 import { addCreditsFromPackage } from '@/lib/credits';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { createNotification } from '@/lib/notifications';
+import { fetchIyzicoStatus } from '@/lib/iyzico';
 
 export default function CheckoutPage() {
   const [searchParams] = useSearchParams();
@@ -26,6 +27,11 @@ export default function CheckoutPage() {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [iyzicoOn, setIyzicoOn] = useState(false);
+
+  useEffect(() => {
+    fetchIyzicoStatus().then((s) => setIyzicoOn(s.enabled));
+  }, []);
 
   const update = (field: string, value: string | boolean) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -70,17 +76,20 @@ export default function CheckoutPage() {
     setSubmitting(true);
 
     try {
-      // iyzico canlı tahsilat onay sonrası burada başlar.
-      // Şimdilik hak burada tanımlanır; başarı URL'si tek başına kredi vermez.
-      await addCreditsFromPackage(user.id, selected.id, {
+      const result = await addCreditsFromPackage(user.id, selected.id, {
         amount: selected.price,
         buyerName: form.fullName.trim(),
         buyerEmail: form.email.trim(),
         buyerPhone: form.phone.trim(),
         companyName: form.companyName.trim(),
         taxId: form.taxId.trim(),
-        address: form.address.trim(),
+        billingAddress: form.address.trim(),
       });
+
+      if (result.mode === 'iyzico' && result.paymentPageUrl) {
+        window.location.href = result.paymentPageUrl;
+        return;
+      }
 
       await createNotification({
         userId: user.id,
@@ -97,11 +106,12 @@ export default function CheckoutPage() {
           packageId: selected.id,
           packageName: selected.name,
           amount: selected.price,
+          paymentId: result.payment_id,
           createdAt: new Date().toISOString(),
-        })
+        }),
       );
 
-      navigate(`/odeme/basarili?paket=${selected.id}&t=${orderToken}`);
+      navigate(`/odeme/basarili?paket=${selected.id}&t=${orderToken}&payment=${result.payment_id}`);
     } catch (err) {
       setErrors({
         auth: err instanceof Error ? err.message : 'Sipariş tamamlanamadı',
@@ -214,7 +224,9 @@ export default function CheckoutPage() {
                   <div>
                     <p className="font-medium text-sm text-foreground-950">Kredi / Banka Kartı (iyzico)</p>
                     <p className="text-xs text-foreground-600 mt-0.5">
-                      3D Secure ile güvenli ödeme. iyzico hesabı aktifleşince canlı tahsilat açılacak.
+                      {iyzicoOn
+                        ? '3D Secure ile iyzico Checkout Form’a yönlendirileceksiniz.'
+                        : 'iyzico anahtarları henüz yok — test modunda hak anında tanımlanır (kart çekilmez).'}
                     </p>
                   </div>
                 </div>
@@ -248,7 +260,11 @@ export default function CheckoutPage() {
                   disabled={submitting}
                   className="mt-5 w-full py-3.5 rounded-xl bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white font-semibold transition-colors"
                 >
-                  {submitting ? 'İşleniyor...' : `${formatPrice(selected.price)} — Ödemeyi Tamamla`}
+                  {submitting
+                    ? 'İşleniyor...'
+                    : iyzicoOn
+                      ? `${formatPrice(selected.price)} — iyzico ile Öde`
+                      : `${formatPrice(selected.price)} — Test Siparişi Tamamla`}
                 </button>
               </div>
             </form>

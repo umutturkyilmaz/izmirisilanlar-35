@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
-import supabase from '@/lib/supabase';
+import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { ASSETS } from '@/lib/assets';
 import { createNotification } from '@/lib/notifications';
@@ -68,14 +68,7 @@ export default function JobDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const { data, error: fetchError } = await supabase
-          .from('jobs')
-          .select('*')
-          .eq('id', id)
-          .eq('status', 'active')
-          .maybeSingle();
-
-        if (fetchError) throw fetchError;
+        const data = await api<Job>(`/api/jobs/${id}`, { auth: false });
         setJob(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'İlan yüklenemedi');
@@ -90,25 +83,24 @@ export default function JobDetailPage() {
     if (!user || !id) return;
 
     const checkApplication = async () => {
-      const { data } = await supabase
-        .from('applications')
-        .select('id')
-        .eq('candidate_id', user.id)
-        .eq('job_id', id)
-        .maybeSingle();
-      if (data) setAlreadyApplied(true);
+      try {
+        const apps = await api<{ job_id: string }[]>('/api/applications/mine');
+        if (apps.some((a) => a.job_id === id)) setAlreadyApplied(true);
+      } catch {
+        /* ignore */
+      }
     };
 
     const checkFavorite = async () => {
-      const { data } = await supabase
-        .from('favorites')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('job_id', id)
-        .maybeSingle();
-      if (data) {
-        setIsFavorited(true);
-        setFavoriteId(data.id);
+      try {
+        const favs = await api<{ id: string; job_id: string }[]>('/api/favorites');
+        const found = favs.find((f) => f.job_id === id);
+        if (found) {
+          setIsFavorited(true);
+          setFavoriteId(found.id);
+        }
+      } catch {
+        /* ignore */
       }
     };
 
@@ -122,57 +114,19 @@ export default function JobDetailPage() {
     const fetchSimilar = async () => {
       setSimilarLoading(true);
       try {
-        const sector = job.sector;
-        const city = job.city;
-
-        const { data: bySector } = await supabase
-          .from('jobs')
-          .select('id, title, company_name, city, sector, job_type, salary_min, salary_max, created_at')
-          .eq('status', 'active')
-          .eq('sector', sector)
-          .neq('id', id)
-          .limit(8)
-          .order('created_at', { ascending: false });
-
-        const sectorIds = new Set((bySector || []).map((j: any) => j.id));
-        let combined = [...(bySector || [])];
-
-        if (combined.length < 6) {
-          const { data: byCity } = await supabase
-            .from('jobs')
-            .select('id, title, company_name, city, sector, job_type, salary_min, salary_max, created_at')
-            .eq('status', 'active')
-            .eq('city', city)
-            .neq('id', id)
-            .limit(12)
-            .order('created_at', { ascending: false });
-
-          (byCity || []).forEach((j: any) => {
-            if (!sectorIds.has(j.id)) {
-              combined.push(j);
-              sectorIds.add(j.id);
-            }
-          });
+        const all = await api<SimilarJob[]>(`/api/jobs?status=active&limit=50`, { auth: false });
+        const others = all.filter((j) => j.id !== id);
+        const bySector = others.filter((j) => j.sector === job.sector);
+        const byCity = others.filter((j) => j.city === job.city);
+        const seen = new Set<string>();
+        const combined: SimilarJob[] = [];
+        for (const j of [...bySector, ...byCity, ...others]) {
+          if (seen.has(j.id)) continue;
+          seen.add(j.id);
+          combined.push(j);
+          if (combined.length >= 6) break;
         }
-
-        if (combined.length < 6) {
-          const { data: fallback } = await supabase
-            .from('jobs')
-            .select('id, title, company_name, city, sector, job_type, salary_min, salary_max, created_at')
-            .eq('status', 'active')
-            .neq('id', id)
-            .limit(12)
-            .order('created_at', { ascending: false });
-
-          (fallback || []).forEach((j: any) => {
-            if (!sectorIds.has(j.id)) {
-              combined.push(j);
-              sectorIds.add(j.id);
-            }
-          });
-        }
-
-        setSimilarJobs((combined as SimilarJob[]).slice(0, 6));
+        setSimilarJobs(combined);
       } catch {
         // silent
       } finally {
@@ -193,17 +147,13 @@ export default function JobDetailPage() {
     setApplyMsg('');
 
     try {
-      const { error: applyError } = await supabase
-        .from('applications')
-        .insert({
+      await api('/api/applications', {
+        body: {
           job_id: id,
-          candidate_id: user.id,
           cover_letter: coverLetter || null,
           cv_url: profile?.cv_url || null,
-          status: 'pending',
-        });
-
-      if (applyError) throw applyError;
+        },
+      });
 
       if (job?.employer_id) {
         await createNotification({
@@ -230,17 +180,11 @@ export default function JobDetailPage() {
 
     try {
       if (isFavorited && favoriteId) {
-        await supabase.from('favorites').delete().eq('id', favoriteId);
+        await api(`/api/favorites/${favoriteId}`, { method: 'DELETE' });
         setIsFavorited(false);
         setFavoriteId(null);
       } else {
-        const { data, error: favError } = await supabase
-          .from('favorites')
-          .insert({ user_id: user.id, job_id: id })
-          .select('id')
-          .single();
-
-        if (favError) throw favError;
+        const data = await api<{ id: string }>('/api/favorites', { body: { job_id: id } });
         setIsFavorited(true);
         setFavoriteId(data.id);
       }
