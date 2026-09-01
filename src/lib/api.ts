@@ -1,6 +1,9 @@
 const API_URL = (import.meta.env.VITE_PUBLIC_API_URL || '').replace(/\/$/, '');
 
-export const isApiConfigured = Boolean(API_URL && !API_URL.includes('YOUR_'));
+/** Dev: Vite proxy; prod: VITE_PUBLIC_API_URL zorunlu */
+export const isApiConfigured = Boolean(
+  import.meta.env.DEV || (API_URL && !API_URL.includes('YOUR_')),
+);
 
 const TOKEN_KEY = 'izmir_api_token';
 

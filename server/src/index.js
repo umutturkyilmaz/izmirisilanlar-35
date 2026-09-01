@@ -16,6 +16,11 @@ const PORT = Number(process.env.PORT || 8080);
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-change-me';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
 
+if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || JWT_SECRET === 'dev-change-me')) {
+  console.error('FATAL: JWT_SECRET production ortamında zorunlu');
+  process.exit(1);
+}
+
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const pool = mysql.createPool({
@@ -182,19 +187,7 @@ app.get('/api/auth/me', auth, (req, res) => {
 
 app.patch('/api/auth/profile', auth, async (req, res) => {
   try {
-    const allowed = [
-      'full_name',
-      'company_name',
-      'phone',
-      'city',
-      'bio',
-      'avatar_url',
-      'cv_url',
-      'vergi_numarasi',
-      'dogrulama_durumu',
-      'dogrulama_talebi_tarihi',
-      'dogrulanma_tarihi',
-    ];
+    const allowed = ['full_name', 'company_name', 'phone', 'city', 'bio', 'avatar_url', 'cv_url', 'vergi_numarasi'];
     const sets = [];
     const params = { id: req.user.id };
     for (const key of allowed) {
@@ -202,6 +195,16 @@ app.patch('/api/auth/profile', auth, async (req, res) => {
         sets.push(`${key} = :${key}`);
         params[key] = req.body[key];
       }
+    }
+    // İşveren vergi no güncellerse doğrulama talebi (kullanıcı status atlayamaz)
+    if (
+      req.user.role === 'employer' &&
+      req.body.vergi_numarasi !== undefined &&
+      req.user.dogrulama_durumu !== 'verified'
+    ) {
+      sets.push('dogrulama_durumu = :dogrulama_durumu');
+      sets.push('dogrulama_talebi_tarihi = NOW()');
+      params.dogrulama_durumu = 'pending';
     }
     if (!sets.length) return res.status(400).json({ error: 'Güncellenecek alan yok' });
     await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = :id`, params);
@@ -230,8 +233,15 @@ app.get('/api/categories', async (_req, res) => {
 });
 
 // ---- Jobs ----
+async function expireOutdatedJobs() {
+  await pool.query(
+    `UPDATE jobs SET status = 'expired' WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at < NOW()`,
+  );
+}
+
 app.get('/api/jobs', optionalAuth, async (req, res) => {
   try {
+    await expireOutdatedJobs();
     const { status, featured, employer_id, q, city, sector, job_type, limit = '50' } = req.query;
     const where = [];
     const params = {};
@@ -298,10 +308,32 @@ app.post('/api/jobs', auth, async (req, res) => {
   if (!['employer', 'admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'İşveren gerekli' });
   }
+  const conn = await pool.getConnection();
   try {
-    const id = uid();
+    await conn.beginTransaction();
     const b = req.body || {};
-    await pool.query(
+    let featured = Boolean(b.featured);
+    let expiresAt = b.expires_at ? new Date(b.expires_at) : null;
+
+    if (b.credit_id) {
+      const [creditRows] = await conn.query(
+        `SELECT * FROM employer_credits WHERE id = :id AND employer_id = :uid AND remaining > 0 LIMIT 1 FOR UPDATE`,
+        { id: b.credit_id, uid: req.user.id },
+      );
+      const credit = creditRows[0];
+      if (!credit) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Geçerli paket hakkı bulunamadı' });
+      }
+      await conn.query(`UPDATE employer_credits SET remaining = remaining - 1 WHERE id = :id`, {
+        id: credit.id,
+      });
+      featured = !!credit.featured;
+      expiresAt = new Date(Date.now() + (credit.duration_days || 7) * 24 * 60 * 60 * 1000);
+    }
+
+    const id = uid();
+    await conn.query(
       `INSERT INTO jobs
       (id, employer_id, title, category_id, sector, description, company_name, city, job_type, experience_level,
        salary_min, salary_max, requirements, benefits, image_url, status, featured, expires_at)
@@ -325,14 +357,18 @@ app.post('/api/jobs', auth, async (req, res) => {
         benefits: b.benefits ? JSON.stringify(b.benefits) : null,
         image_url: b.image_url || null,
         status: b.status || 'pending',
-        featured: b.featured ? 1 : 0,
-        expires_at: b.expires_at ? new Date(b.expires_at) : null,
+        featured: featured ? 1 : 0,
+        expires_at: expiresAt,
       },
     );
-    const [rows] = await pool.query('SELECT * FROM jobs WHERE id = :id', { id });
+    const [rows] = await conn.query('SELECT * FROM jobs WHERE id = :id', { id });
+    await conn.commit();
     res.status(201).json(parseJob(rows[0]));
   } catch (e) {
+    await conn.rollback();
     res.status(500).json({ error: e.message });
+  } finally {
+    conn.release();
   }
 });
 
@@ -401,6 +437,9 @@ function parseJob(row) {
 
 // ---- Applications ----
 app.post('/api/applications', auth, async (req, res) => {
+  if (req.user.role !== 'candidate') {
+    return res.status(403).json({ error: 'Yalnızca adaylar başvurabilir' });
+  }
   try {
     const id = uid();
     const { job_id, cover_letter, cv_url } = req.body || {};
@@ -436,7 +475,7 @@ app.get('/api/applications/mine', auth, async (req, res) => {
 
 app.get('/api/applications/employer', auth, async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT a.*, j.title AS job_title, u.full_name AS candidate_name
+    `SELECT a.*, j.title AS job_title, u.full_name AS candidate_name, u.email AS candidate_email
      FROM applications a
      INNER JOIN jobs j ON j.id = a.job_id
      LEFT JOIN users u ON u.id = a.candidate_id
@@ -523,34 +562,50 @@ async function grantCreditsForPayment(payment, meta) {
     { pid: payment.id },
   );
   if (existing[0]) return existing[0].id;
-  const creditId = uid();
-  await pool.query(
-    `INSERT INTO employer_credits
-    (id, employer_id, payment_id, package_id, package_name, duration_days, featured, remaining)
-    VALUES
-    (:id, :employer_id, :payment_id, :package_id, :package_name, :duration_days, :featured, :remaining)`,
-    {
-      id: creditId,
-      employer_id: payment.employer_id,
-      payment_id: payment.id,
-      package_id: payment.package_id,
-      package_name: payment.package_name,
-      duration_days: meta.duration_days || 7,
-      featured: meta.featured ? 1 : 0,
-      remaining: meta.credits_count || 1,
-    },
-  );
-  return creditId;
+
+  const count = meta.credits_count || 1;
+  const featuredCount = meta.featured_count ?? (meta.featured ? count : 0);
+  let firstId = null;
+
+  for (let i = 0; i < count; i++) {
+    const creditId = uid();
+    const isFeatured = i < featuredCount;
+    await pool.query(
+      `INSERT INTO employer_credits
+      (id, employer_id, payment_id, package_id, package_name, duration_days, featured, remaining)
+      VALUES
+      (:id, :employer_id, :payment_id, :package_id, :package_name, :duration_days, :featured, 1)`,
+      {
+        id: creditId,
+        employer_id: payment.employer_id,
+        payment_id: payment.id,
+        package_id: payment.package_id,
+        package_name: payment.package_name,
+        duration_days: meta.duration_days || 7,
+        featured: isFeatured ? 1 : 0,
+      },
+    );
+    if (!firstId) firstId = creditId;
+  }
+  return firstId;
 }
 
 app.post('/api/payments/checkout', auth, async (req, res) => {
   try {
+    if (!['employer', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Paket yalnızca işverenler için' });
+    }
     const b = req.body || {};
     const paymentId = uid();
+    const pkgId = b.package_id || '';
+    const creditsCount = pkgId === 'kurumsal' ? 5 : 1;
+    const featuredCount =
+      pkgId === 'kurumsal' ? 2 : pkgId === 'one-cikan' || Boolean(b.featured) ? creditsCount : 0;
     const meta = {
       duration_days: b.duration_days || 7,
-      featured: Boolean(b.featured),
-      credits_count: b.credits_count || 1,
+      featured: featuredCount > 0,
+      featured_count: featuredCount,
+      credits_count: creditsCount,
     };
 
     await pool.query(
@@ -564,7 +619,7 @@ app.post('/api/payments/checkout', auth, async (req, res) => {
         package_id: b.package_id,
         package_name: b.package_name,
         amount: b.amount,
-        status: isIyzicoReady() ? 'pending_iyzico' : 'awaiting_iyzico',
+        status: isIyzicoReady() ? 'pending_iyzico' : 'test_paid',
         buyer_name: b.buyer_name || null,
         buyer_email: b.buyer_email || null,
         buyer_phone: b.buyer_phone || null,
@@ -586,6 +641,7 @@ app.post('/api/payments/checkout', auth, async (req, res) => {
         },
         meta,
       );
+      await pool.query(`UPDATE job_payments SET status = 'test_paid' WHERE id = :id`, { id: paymentId });
       return res.status(201).json({
         mode: 'test',
         payment_id: paymentId,
@@ -731,12 +787,14 @@ app.get('/api/notifications', auth, async (req, res) => {
 });
 
 app.post('/api/notifications', auth, async (req, res) => {
+  const targetUserId =
+    req.user.role === 'admin' && req.body.user_id ? req.body.user_id : req.user.id;
   const id = uid();
   await pool.query(
     `INSERT INTO notifications (id, user_id, title, body, link, \`read\`) VALUES (:id, :user_id, :title, :body, :link, 0)`,
     {
       id,
-      user_id: req.body.user_id || req.user.id,
+      user_id: targetUserId,
       title: req.body.title,
       body: req.body.body,
       link: req.body.link || null,
@@ -798,7 +856,15 @@ app.get('/api/admin/stats', auth, async (req, res) => {
   res.json({ jobs: j.c, applications: a.c, employers: e.c, candidates: c.c });
 });
 
-app.post('/api/jobs/expire', async (_req, res) => {
+app.post('/api/jobs/expire', async (req, res) => {
+  const secret = req.headers['x-cron-secret'] || req.body?.secret;
+  if (process.env.CRON_SECRET) {
+    if (secret !== process.env.CRON_SECRET) {
+      return res.status(401).json({ error: 'Yetkisiz' });
+    }
+  } else if (process.env.NODE_ENV === 'production') {
+    return res.status(401).json({ error: 'CRON_SECRET tanımlı değil' });
+  }
   const [r] = await pool.query(
     `UPDATE jobs SET status = 'expired' WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at < NOW()`,
   );

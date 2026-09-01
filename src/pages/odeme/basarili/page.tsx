@@ -31,7 +31,7 @@ export default function PaymentSuccessPage() {
             `/api/payments/${paymentId}`,
           );
           if (cancelled) return;
-          if (p.status === 'paid' || p.status === 'awaiting_iyzico') {
+          if (p.status === 'paid' || p.status === 'test_paid') {
             setValid(true);
             setViaIyzico(p.status === 'paid');
             setOrderRef(paymentId.slice(0, 12).toUpperCase());

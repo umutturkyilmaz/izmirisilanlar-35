@@ -6,15 +6,6 @@ import { AuthProvider } from "@/hooks/useAuth";
 import CookieBanner from "@/components/feature/CookieBanner";
 import ConfigBanner from "@/components/feature/ConfigBanner";
 import ErrorBoundary from "@/components/feature/ErrorBoundary";
-import { useEffect } from "react";
-import { expireOutdatedJobs } from "@/lib/expireJobs";
-
-function JobExpiryRunner() {
-  useEffect(() => {
-    expireOutdatedJobs();
-  }, []);
-  return null;
-}
 
 function App() {
   return (
@@ -22,7 +13,6 @@ function App() {
       <AuthProvider>
         <ErrorBoundary>
           <BrowserRouter basename={__BASE_PATH__}>
-            <JobExpiryRunner />
             <AppRoutes />
             <CookieBanner />
             <ConfigBanner />

@@ -7,8 +7,6 @@ import { api } from '@/lib/api';
 import { uploadUserFile } from '@/lib/storage';
 import {
   fetchCredits,
-  consumeCredit,
-  totalRemaining,
   type EmployerCredit,
 } from '@/lib/credits';
 
@@ -82,7 +80,7 @@ export default function PostJobPage() {
     let cancelled = false;
     (async () => {
       const list = await fetchCredits(user.id);
-      const total = await totalRemaining(user.id);
+      const total = list.reduce((s, c) => s + (c.remaining || 0), 0);
       if (cancelled) return;
       setCredits(list);
       setRemaining(total);
@@ -149,11 +147,6 @@ export default function PostJobPage() {
     setSubmitting(true);
     setSubmitResult(null);
     try {
-      const credit = await consumeCredit(user.id, selectedCreditId);
-      if (!credit) {
-        throw new Error('Paket hakkınız bulunamadı veya tükenmiş. Lütfen paket satın alın.');
-      }
-
       let imageUrl: string | null = null;
       if (imageFile) {
         const uploaded = await uploadUserFile('job-images', user.id, imageFile);
@@ -167,6 +160,7 @@ export default function PostJobPage() {
 
       await api('/api/jobs', {
         body: {
+          credit_id: selectedCreditId,
           title: formData.title.trim(),
           category_id: formData.category_id,
           sector: selectedCategory?.name || formData.sector || '',
@@ -181,14 +175,15 @@ export default function PostJobPage() {
           benefits: filteredBenefits.length > 0 ? filteredBenefits : null,
           image_url: imageUrl,
           status: 'pending',
-          featured: credit.featured,
-          expires_at: new Date(Date.now() + credit.durationDays * 24 * 60 * 60 * 1000).toISOString(),
         },
       });
 
+      const selectedCredit = credits.find((c) => c.id === selectedCreditId);
+      const days = selectedCredit?.duration_days || 7;
+
       setSubmitResult({
         type: 'success',
-        message: `İlanınız admin onayına gönderildi! Yayın süresi: ${credit.durationDays} gün.`,
+        message: `İlanınız admin onayına gönderildi! Yayın süresi: ${days} gün.`,
       });
       setTimeout(() => navigate('/profil/isveren'), 2000);
     } catch (err) {
@@ -287,7 +282,7 @@ export default function PostJobPage() {
               <select value={selectedCreditId} onChange={(e) => setSelectedCreditId(e.target.value)} className="w-full rounded-lg border border-background-300 px-3 py-2.5 text-sm">
                 {credits.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.packageName} — {c.durationDays} gün{c.featured ? ' · Öne çıkan' : ''} (kalan {c.remaining})
+                    {c.package_name} — {c.duration_days} gün{c.featured ? ' · Öne çıkan' : ''} (kalan {c.remaining})
                   </option>
                 ))}
               </select>

@@ -1,21 +1,30 @@
 # Railway Deploy — İzmir İş İlanları 35
 
-Hosting: **yalnızca Railway** (Docker yok — Nixpacks + Node).
+Hosting: **Railway** (Nixpacks + Node). İki servis: **Web** + **API** + **MySQL**.
 
-## Variables
-- `VITE_PUBLIC_SUPABASE_URL`
-- `VITE_PUBLIC_SUPABASE_ANON_KEY`
-- `VITE_PUBLIC_SITE_URL=https://izmirisilanlari35.com`
+## 1. Web servisi (repo kökü)
+Variables:
+```
+VITE_PUBLIC_API_URL=https://SENIN-API.up.railway.app
+VITE_PUBLIC_SITE_URL=https://izmirisilanlari35.com
+```
 
-## Build / Start (otomatik)
-- Build: `npm ci && npm run build`
-- Start: `npm run start` → `out/` klasörünü servis eder
+Build: `npm ci && npm run build`  
+Start: `npm run start` (static `out/`)
 
-## Railway panel
-1. Settings → Build: **Nixpacks** (Dockerfile seçiliyse kaldır)
-2. Root directory: boş
-3. Deploy Success → `*.up.railway.app` açılmalı
+## 2. API servisi (Root Directory: `server`)
+Variables: MySQL referansları + `JWT_SECRET` + `PUBLIC_API_URL` + `PUBLIC_SITE_URL`  
+İsteğe bağlı: `UPLOAD_DIR=/data/uploads` (Volume mount), `CRON_SECRET`, iyzico anahtarları
 
-## Domain
-WordPress’ten domain’i ayır → Railway CNAME + `_railway-verify` TXT  
-Detay için Networking → Configure DNS
+Start: `npm start`  
+Health: `GET /api/health`
+
+## 3. MySQL
+`server/schema.sql` dosyasını Query ile çalıştır.
+
+## 4. Sıra
+1. MySQL ekle → schema çalıştır  
+2. API deploy → Generate Domain  
+3. Web’e `VITE_PUBLIC_API_URL` yaz → Redeploy  
+
+Detaylı kurulum: `MANUEL.md`

@@ -36,6 +36,22 @@ UPDATE users SET role = 'admin' WHERE email = 'senin@email.com';
 - `GET https://API/api/health` → `{"ok":true,"db":true}`
 - Sitede kayıt / giriş / ilan listesi
 
+## Upload kalıcılığı (Railway)
+API servisinde Volume ekle → mount path `/data/uploads`  
+Variable: `UPLOAD_DIR=/data/uploads`  
+Redeploy olmadan dosyalar korunur.
+
+## Lokal geliştirme
+```bash
+# Terminal 1 — API
+cd server && cp .env.example .env   # MySQL bilgilerini doldur
+npm install && npm run dev
+
+# Terminal 2 — Web (proxy ile /api → localhost:8080)
+npm run dev
+```
+`.env` kökte opsiyonel; proxy kullanıyorsan `VITE_PUBLIC_API_URL` boş bırakılabilir.
+
 ## iyzico (senin vereceğin bilgiler)
 
 Kod hazır. Anahtar yokken **test modu**: checkout → kredi anında (`mode: test`).
