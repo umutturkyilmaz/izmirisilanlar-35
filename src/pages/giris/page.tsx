@@ -4,9 +4,6 @@ import { useTranslation } from 'react-i18next';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
-import { ASSETS } from '@/lib/assets';
-
-const LOGO_URL = ASSETS.logo;
 
 export default function LoginPage() {
   const { t } = useTranslation('common');
@@ -40,11 +37,6 @@ export default function LoginPage() {
           <div className="bg-background-50 dark:bg-background-100 rounded-2xl border border-background-200 dark:border-background-200 p-6 md:p-8 shadow-sm">
             {/* Logo */}
             <div className="text-center mb-6">
-              <img
-                src={LOGO_URL}
-                alt={t('brand')}
-                className="h-14 w-auto mx-auto object-contain rounded-lg mb-3"
-              />
               <h1 className="font-heading font-bold text-xl md:text-2xl text-foreground-950 dark:text-foreground-950">
                 {t('auth.loginTitle')}
               </h1>
