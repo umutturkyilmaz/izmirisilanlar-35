@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
+import { ASSETS } from '@/lib/assets';
 import NotificationBell from '@/components/feature/NotificationBell';
 
 export default function Navbar() {
@@ -110,8 +111,13 @@ export default function Navbar() {
     >
       <nav className="flex items-center justify-between px-4 md:px-6 lg:px-8 py-3 md:py-4">
         {/* Logo */}
-        <Link to="/" className="shrink-0">
-          <span className="font-heading font-bold text-lg md:text-xl text-foreground-950 dark:text-foreground-950">
+        <Link to="/" className="flex items-center gap-2 shrink-0">
+          <img
+            src={ASSETS.logo}
+            alt={t('brand')}
+            className="h-10 w-auto object-contain"
+          />
+          <span className="hidden sm:block font-heading font-bold text-lg md:text-xl text-foreground-950 dark:text-foreground-950">
             {t('brand')}
           </span>
         </Link>

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { ASSETS } from '@/lib/assets';
 
 export default function Footer() {
   const { t } = useTranslation('common');
@@ -10,7 +11,12 @@ export default function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
           {/* Brand Column */}
           <div className="sm:col-span-2 lg:col-span-1">
-            <Link to="/" className="mb-4 inline-block">
+            <Link to="/" className="flex items-center gap-2 mb-4">
+              <img
+                src={ASSETS.logo}
+                alt={t('brand')}
+                className="h-10 w-auto object-contain"
+              />
               <span className="font-heading font-bold text-lg text-foreground-950 dark:text-foreground-950">
                 {t('brand')}
               </span>
