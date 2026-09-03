@@ -76,6 +76,8 @@ export default function Navbar() {
   const profilePath =
     profile?.role === 'admin' ? '/admin' : profile?.role === 'employer' ? '/profil/isveren' : '/profil/aday';
 
+  const canPostJob = profile?.role === 'employer' || profile?.role === 'admin';
+
   const showVerificationWarning = profile?.role === 'employer' && profile.dogrulama_durumu !== 'verified';
 
   return (
@@ -230,8 +232,8 @@ export default function Navbar() {
                 )}
               </div>
 
-              {/* Post Job Button (employer) */}
-              {(profile.role === 'employer' || profile.role === 'admin') && (
+              {/* Post Job: işveren veya site yöneticisi */}
+              {canPostJob && (
                 <Link
                   to="/ilan-ekle"
                   className="hidden lg:inline-flex px-4 py-2 text-sm font-medium bg-accent-500 text-background-50 rounded-lg hover:bg-accent-600 transition-colors whitespace-nowrap"
@@ -366,6 +368,7 @@ export default function Navbar() {
                 </Link>
               </>
             )}
+            {(canPostJob || !user) && (
             <Link
               to="/ilan-ekle"
               onClick={() => setIsMobileMenuOpen(false)}
@@ -374,6 +377,7 @@ export default function Navbar() {
               <i className="ri-add-line mr-1" />
               {t('nav.postJob')}
             </Link>
+            )}
           </div>
         </div>
       )}
