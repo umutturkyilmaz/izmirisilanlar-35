@@ -231,7 +231,7 @@ export default function Navbar() {
               </div>
 
               {/* Post Job Button (employer) */}
-              {profile.role === 'employer' || profile.role === 'admin' ? (
+              {(profile.role === 'employer' || profile.role === 'admin') && (
                 <Link
                   to="/ilan-ekle"
                   className="hidden lg:inline-flex px-4 py-2 text-sm font-medium bg-accent-500 text-background-50 rounded-lg hover:bg-accent-600 transition-colors whitespace-nowrap"
