@@ -1,6 +1,8 @@
--- İzmir İş İlanları 35 — MySQL şeması (Railway MySQL)
--- Railway MySQL → Query / mysql client ile bir kez çalıştır.
+-- İzmir Is Ilanlari 35 — MySQL sema (Railway uyumlu)
+-- Railway Query: Her CREATE blogunu TEK TEK calistir (hepsini birden yapistirma!)
+-- Veya asagidaki tum dosyayi mysql client ile: mysql ... < schema.sql
 
+-- ========== 1/9 users ==========
 CREATE TABLE IF NOT EXISTS users (
   id CHAR(36) PRIMARY KEY,
   email VARCHAR(255) NOT NULL UNIQUE,
@@ -18,9 +20,10 @@ CREATE TABLE IF NOT EXISTS users (
   dogrulama_talebi_tarihi DATETIME NULL,
   dogrulanma_tarihi DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at DATETIME NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ========== 2/9 job_categories ==========
 CREATE TABLE IF NOT EXISTS job_categories (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(128) NOT NULL UNIQUE,
@@ -28,6 +31,7 @@ CREATE TABLE IF NOT EXISTS job_categories (
   sort_order INT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ========== 3/9 jobs ==========
 CREATE TABLE IF NOT EXISTS jobs (
   id CHAR(36) PRIMARY KEY,
   employer_id CHAR(36) NOT NULL,
@@ -48,7 +52,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   featured TINYINT(1) NOT NULL DEFAULT 0,
   expires_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
   CONSTRAINT fk_jobs_employer FOREIGN KEY (employer_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_jobs_category FOREIGN KEY (category_id) REFERENCES job_categories(id) ON DELETE SET NULL,
   INDEX idx_jobs_status (status),
@@ -57,6 +61,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   INDEX idx_jobs_created (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ========== 4/9 applications ==========
 CREATE TABLE IF NOT EXISTS applications (
   id CHAR(36) PRIMARY KEY,
   job_id CHAR(36) NOT NULL,
@@ -70,6 +75,7 @@ CREATE TABLE IF NOT EXISTS applications (
   CONSTRAINT fk_app_cand FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ========== 5/9 favorites ==========
 CREATE TABLE IF NOT EXISTS favorites (
   id CHAR(36) PRIMARY KEY,
   user_id CHAR(36) NOT NULL,
@@ -80,6 +86,7 @@ CREATE TABLE IF NOT EXISTS favorites (
   CONSTRAINT fk_fav_job FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ========== 6/9 job_payments ==========
 CREATE TABLE IF NOT EXISTS job_payments (
   id CHAR(36) PRIMARY KEY,
   employer_id CHAR(36) NOT NULL,
@@ -98,11 +105,12 @@ CREATE TABLE IF NOT EXISTS job_payments (
   tax_id VARCHAR(64) NULL,
   billing_address TEXT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
   CONSTRAINT fk_pay_emp FOREIGN KEY (employer_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_pay_token (iyzico_token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ========== 7/9 employer_credits ==========
 CREATE TABLE IF NOT EXISTS employer_credits (
   id CHAR(36) PRIMARY KEY,
   employer_id CHAR(36) NOT NULL,
@@ -117,6 +125,7 @@ CREATE TABLE IF NOT EXISTS employer_credits (
   CONSTRAINT fk_cred_pay FOREIGN KEY (payment_id) REFERENCES job_payments(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ========== 8/9 notifications ==========
 CREATE TABLE IF NOT EXISTS notifications (
   id CHAR(36) PRIMARY KEY,
   user_id CHAR(36) NOT NULL,
@@ -128,6 +137,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   CONSTRAINT fk_notif_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ========== 9/9 contact_messages ==========
 CREATE TABLE IF NOT EXISTS contact_messages (
   id CHAR(36) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
@@ -137,14 +147,15 @@ CREATE TABLE IF NOT EXISTS contact_messages (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ========== 10/10 kategoriler (seed) ==========
 INSERT IGNORE INTO job_categories (name, icon, sort_order) VALUES
   ('Teknoloji', 'ri-code-s-slash-line', 1),
-  ('Satış & Pazarlama', 'ri-megaphone-line', 2),
+  ('Satis & Pazarlama', 'ri-megaphone-line', 2),
   ('Muhasebe & Finans', 'ri-money-dollar-circle-line', 3),
-  ('İnsan Kaynakları', 'ri-team-line', 4),
-  ('Üretim', 'ri-building-2-line', 5),
+  ('Insan Kaynaklari', 'ri-team-line', 4),
+  ('Uretim', 'ri-building-2-line', 5),
   ('Lojistik', 'ri-truck-line', 6),
-  ('Sağlık', 'ri-heart-pulse-line', 7),
-  ('Eğitim', 'ri-book-open-line', 8),
+  ('Saglik', 'ri-heart-pulse-line', 7),
+  ('Egitim', 'ri-book-open-line', 8),
   ('Turizm & Otelcilik', 'ri-hotel-line', 9),
-  ('Diğer', 'ri-briefcase-line', 99);
+  ('Diger', 'ri-briefcase-line', 99);

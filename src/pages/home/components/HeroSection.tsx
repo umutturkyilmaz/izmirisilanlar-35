@@ -16,19 +16,24 @@ export default function HeroSection() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const data = await api<{ activeJobs: number; companies: number }>('/api/jobs/stats', { auth: false });
+        const data = await api<{
+          activeJobs: number;
+          companies: number;
+          candidates: number;
+          successfulApplications: number;
+        }>('/api/jobs/stats', { auth: false });
         setStats({
-          activeJobs: data.activeJobs || 12543,
-          companies: data.companies || 2847,
-          candidates: 56720,
-          successfulApplications: 8934,
+          activeJobs: data.activeJobs || 0,
+          companies: data.companies || 0,
+          candidates: data.candidates || 0,
+          successfulApplications: data.successfulApplications || 0,
         });
       } catch {
         setStats({
-          activeJobs: 12543,
-          companies: 2847,
-          candidates: 56720,
-          successfulApplications: 8934,
+          activeJobs: 0,
+          companies: 0,
+          candidates: 0,
+          successfulApplications: 0,
         });
       }
     };

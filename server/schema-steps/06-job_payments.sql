@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS job_payments (
+  id CHAR(36) PRIMARY KEY,
+  employer_id CHAR(36) NOT NULL,
+  package_id VARCHAR(64) NOT NULL,
+  package_name VARCHAR(128) NOT NULL,
+  amount INT NOT NULL,
+  currency VARCHAR(8) NOT NULL DEFAULT 'TRY',
+  status VARCHAR(64) NOT NULL DEFAULT 'pending',
+  iyzico_payment_id VARCHAR(128) NULL,
+  iyzico_token VARCHAR(255) NULL,
+  credits_meta JSON NULL,
+  buyer_name VARCHAR(255) NULL,
+  buyer_email VARCHAR(255) NULL,
+  buyer_phone VARCHAR(64) NULL,
+  company_name VARCHAR(255) NULL,
+  tax_id VARCHAR(64) NULL,
+  billing_address TEXT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  CONSTRAINT fk_pay_emp FOREIGN KEY (employer_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_pay_token (iyzico_token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

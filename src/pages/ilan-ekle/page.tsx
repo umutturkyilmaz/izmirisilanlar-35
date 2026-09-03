@@ -38,6 +38,9 @@ export default function PostJobPage() {
   const [credits, setCredits] = useState<EmployerCredit[]>([]);
   const [remaining, setRemaining] = useState(0);
   const [selectedCreditId, setSelectedCreditId] = useState('');
+  const isAdmin = profile?.role === 'admin';
+  const [adminFeatured, setAdminFeatured] = useState(false);
+  const [adminDays, setAdminDays] = useState(30);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     title: '',
@@ -131,7 +134,7 @@ export default function PostJobPage() {
     if (!formData.company_name.trim()) errors.company_name = 'Şirket adı zorunludur';
     if (!formData.job_type) errors.job_type = 'Çalışma tipi seçmelisiniz';
     if (!formData.experience_level) errors.experience_level = 'Deneyim seviyesi seçmelisiniz';
-    if (!selectedCreditId) errors.credit = 'Yayınlamak için paket hakkı seçmelisiniz';
+    if (!isAdmin && !selectedCreditId) errors.credit = 'Yayınlamak için paket hakkı seçmelisiniz';
     const salaryMin = parseInt(formData.salary_min, 10);
     const salaryMax = parseInt(formData.salary_max, 10);
     if (formData.salary_min && isNaN(salaryMin)) errors.salary_min = 'Geçerli bir sayı giriniz';
@@ -160,7 +163,7 @@ export default function PostJobPage() {
 
       await api('/api/jobs', {
         body: {
-          credit_id: selectedCreditId,
+          ...(isAdmin ? {} : { credit_id: selectedCreditId }),
           title: formData.title.trim(),
           category_id: formData.category_id,
           sector: selectedCategory?.name || formData.sector || '',
@@ -174,18 +177,22 @@ export default function PostJobPage() {
           requirements: filteredRequirements.length > 0 ? filteredRequirements : null,
           benefits: filteredBenefits.length > 0 ? filteredBenefits : null,
           image_url: imageUrl,
-          status: 'pending',
+          status: isAdmin ? 'active' : 'pending',
+          featured: isAdmin ? adminFeatured : undefined,
+          duration_days: isAdmin ? adminDays : undefined,
         },
       });
 
       const selectedCredit = credits.find((c) => c.id === selectedCreditId);
-      const days = selectedCredit?.duration_days || 7;
+      const days = isAdmin ? adminDays : selectedCredit?.duration_days || 7;
 
       setSubmitResult({
         type: 'success',
-        message: `İlanınız admin onayına gönderildi! Yayın süresi: ${days} gün.`,
+        message: isAdmin
+          ? `İlan yayında. Süre: ${days} gün.`
+          : `İlanınız admin onayına gönderildi! Yayın süresi: ${days} gün.`,
       });
-      setTimeout(() => navigate('/profil/isveren'), 2000);
+      setTimeout(() => navigate(isAdmin ? '/admin' : '/profil/isveren'), 2000);
     } catch (err) {
       setSubmitResult({
         type: 'error',
@@ -227,7 +234,7 @@ export default function PostJobPage() {
     );
   }
 
-  if (profile.role !== 'employer') {
+  if (profile.role !== 'employer' && profile.role !== 'admin') {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />
@@ -242,7 +249,7 @@ export default function PostJobPage() {
     );
   }
 
-  if (profile.dogrulama_durumu !== 'verified') {
+  if (!isAdmin && profile.dogrulama_durumu !== 'verified') {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />
@@ -265,10 +272,31 @@ export default function PostJobPage() {
         <div className="max-w-3xl mx-auto px-4 md:px-6">
           <div className="mb-8">
             <h1 className="font-heading font-bold text-2xl text-foreground-950">Yeni İş İlanı Yayınla</h1>
-            <p className="text-sm text-foreground-500">Kalan yayın hakkı: {remaining}</p>
+            <p className="text-sm text-foreground-500">
+              {isAdmin ? 'Site sahibi ilanı — paket hakkı gerekmez, doğrudan yayına alınır.' : `Kalan yayın hakkı: ${remaining}`}
+            </p>
           </div>
 
-          {remaining === 0 ? (
+          {isAdmin ? (
+            <div className="mb-6 p-4 rounded-xl border border-primary-200 bg-primary-50/60 space-y-3">
+              <p className="text-sm font-semibold">Admin yayın ayarları</p>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={adminFeatured} onChange={(e) => setAdminFeatured(e.target.checked)} />
+                Öne çıkan ilan
+              </label>
+              <div>
+                <label className="block text-sm mb-1">Yayın süresi (gün)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={adminDays}
+                  onChange={(e) => setAdminDays(parseInt(e.target.value, 10) || 30)}
+                  className="w-32 rounded-lg border border-background-300 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+          ) : remaining === 0 ? (
             <div className="mb-6 p-4 rounded-xl border border-amber-200 bg-amber-50 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
               <div>
                 <p className="text-sm font-semibold text-foreground-950">Aktif paket hakkınız yok</p>
@@ -296,7 +324,7 @@ export default function PostJobPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className={`space-y-6 ${remaining === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
+          <form onSubmit={handleSubmit} className={`space-y-6 ${!isAdmin && remaining === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
             <section className="bg-white rounded-xl border border-background-200 p-5 space-y-4">
               <h2 className="font-heading font-bold text-base">Temel Bilgiler</h2>
               <div>

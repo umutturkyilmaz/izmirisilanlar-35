@@ -1,15 +1,35 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { ASSETS } from '@/lib/assets';
+import { api } from '@/lib/api';
 
 export default function AboutPage() {
-  const stats = [
-    { value: '3.500+', label: 'Aktif İlan', icon: 'ri-briefcase-line' },
-    { value: '1.200+', label: 'Kayıtlı İşveren', icon: 'ri-building-line' },
-    { value: '25.000+', label: 'Kayıtlı Aday', icon: 'ri-user-line' },
-    { value: '8+', label: 'Yıllık Deneyim', icon: 'ri-star-line' },
-  ];
+  const [stats, setStats] = useState([
+    { value: '0', label: 'Aktif İlan', icon: 'ri-briefcase-line' },
+    { value: '0', label: 'Kayıtlı İşveren', icon: 'ri-building-line' },
+    { value: '0', label: 'Kayıtlı Aday', icon: 'ri-user-line' },
+    { value: '0', label: 'Başvuru', icon: 'ri-checkbox-circle-line' },
+  ]);
+
+  useEffect(() => {
+    api<{
+      activeJobs: number;
+      companies: number;
+      candidates: number;
+      successfulApplications: number;
+    }>('/api/jobs/stats', { auth: false })
+      .then((d) => {
+        setStats([
+          { value: String(d.activeJobs || 0), label: 'Aktif İlan', icon: 'ri-briefcase-line' },
+          { value: String(d.companies || 0), label: 'Kayıtlı İşveren', icon: 'ri-building-line' },
+          { value: String(d.candidates || 0), label: 'Kayıtlı Aday', icon: 'ri-user-line' },
+          { value: String(d.successfulApplications || 0), label: 'Başvuru', icon: 'ri-checkbox-circle-line' },
+        ]);
+      })
+      .catch(() => {});
+  }, []);
 
   const values = [
     {
@@ -31,27 +51,6 @@ export default function AboutPage() {
       icon: 'ri-heart-line',
       title: 'Yerel Odak',
       description: 'İzmir başta olmak üzere Ege Bölgesi iş gücü piyasasına özel çözümler sunar, yerel işletmeleri destekleriz.',
-    },
-  ];
-
-  const teamMembers = [
-    {
-      name: 'Ahmet Yılmaz',
-      role: 'Kurucu & CEO',
-      image: ASSETS.team01,
-      bio: '15 yıllık İK ve işe alım deneyimi.',
-    },
-    {
-      name: 'Zeynep Kaya',
-      role: 'Operasyon Direktörü',
-      image: ASSETS.team02,
-      bio: 'İş geliştirme ve müşteri ilişkileri uzmanı.',
-    },
-    {
-      name: 'Mehmet Demir',
-      role: 'Teknoloji Lideri',
-      image: ASSETS.team03,
-      bio: 'Full-stack geliştirici, platform mimarisi.',
     },
   ];
 
@@ -92,13 +91,13 @@ export default function AboutPage() {
                 </h2>
                 <div className="space-y-3 text-sm md:text-base text-foreground-600 leading-relaxed">
                   <p>
-                    <strong className="text-foreground-950">İzmir İş İlanları 35</strong>, 2018 yılında İzmir&apos;de kurulan, bugün tüm Türkiye&apos;ye hizmet veren kapsamlı bir istihdam platformudur. Adını İzmir&apos;in plaka kodu 35&apos;ten alan markamız, Ege&apos;nin dinamik iş gücü piyasasını dijital dünyayla buluşturmayı hedefler.
+                    <strong className="text-foreground-950">İzmir İş İlanları 35</strong>, İzmir ve tüm Türkiye için iş ilanı yayınlama ve iş arama platformudur. Adını İzmir&apos;in plaka kodu 35&apos;ten alır.
                   </p>
                   <p>
-                    Platformumuz, işverenlerin doğru adaylara hızlıca ulaşmasını sağlarken, adaylara da kariyerlerini şekillendirebilecekleri binlerce fırsat sunar. Vergi numarası doğrulaması ile sahte ilanların önüne geçer, her iki taraf için de <strong className="text-foreground-950">güvenli bir iş arama deneyimi</strong> oluştururuz.
+                    Platformumuz, işverenlerin adaylara ulaşmasını sağlarken adaylara da ücretsiz başvuru imkânı sunar. İşveren kayıtlarında vergi numarası alınır; ilan vermek için yönetici onayı gerekir. Böylece sahte ilan ve simsar riskine karşı önlem alınır.
                   </p>
                   <p>
-                    İzmir iş piyasasının nabzını tutan ekibimiz; inşaat, turizm, teknoloji, sağlık, üretim ve daha onlarca sektördeki fırsatları tek bir çatı altında toplar. Yerel işletmeleri ve KOBİ&apos;leri desteklemek, bölgesel kalkınmaya katkıda bulunmak temel misyonlarımızdandır.
+                    İzmir iş piyasasına odaklanır; inşaat, turizm, teknoloji, sağlık, üretim ve diğer sektörlerdeki fırsatları tek çatı altında toplar.
                   </p>
                 </div>
               </div>
@@ -111,8 +110,8 @@ export default function AboutPage() {
                   />
                 </div>
                 <div className="absolute -bottom-4 -left-4 bg-accent-500 text-white rounded-xl px-5 py-3 shadow-sm">
-                  <p className="text-2xl font-bold font-heading">2018&apos;den beri</p>
-                  <p className="text-xs text-white/80">İzmir&apos;in iş ortağı</p>
+                  <p className="text-2xl font-bold font-heading">İzmir 35</p>
+                  <p className="text-xs text-white/80">Yerel istihdam platformu</p>
                 </div>
               </div>
             </div>
@@ -155,7 +154,7 @@ export default function AboutPage() {
                   <h3 className="font-heading font-bold text-lg text-foreground-950">Vizyonumuz</h3>
                 </div>
                 <p className="text-sm text-foreground-600 leading-relaxed">
-                  Türkiye&apos;nin en güvenilir ve en çok tercih edilen bölgesel istihdam platformu olmak. Yapay zeka destekli eşleştirme, anlık bildirim ve dijital CV sistemlerimizle iş arama deneyimini yeniden tanımlamak. Ege Bölgesi&apos;nden başlayarak tüm Türkiye&apos;de istihdamın dijital dönüşümüne öncülük etmek.
+                  Türkiye&apos;nin güvenilir bölgesel istihdam platformlarından biri olmak. İş arayanlarla işverenleri şeffaf ve doğrulanmış hesaplarla buluşturmak.
                 </p>
               </div>
             </div>
@@ -182,31 +181,7 @@ export default function AboutPage() {
             </div>
           </section>
 
-          {/* Team */}
-          <section className="mb-16">
-            <div className="text-center mb-8">
-              <span className="inline-block px-3 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 text-xs font-semibold rounded-full mb-3">
-                Ekibimiz
-              </span>
-              <h2 className="font-heading font-bold text-2xl md:text-3xl text-foreground-950">Perde Arkasındaki İsimler</h2>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {teamMembers.map((member) => (
-                <div key={member.name} className="bg-white dark:bg-background-100 rounded-xl border border-background-200 p-6 text-center hover:border-background-300 transition-colors">
-                  <div className="w-24 h-24 mx-auto rounded-full overflow-hidden mb-4">
-                    <img
-                      src={member.image}
-                      alt={member.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <h3 className="font-heading font-semibold text-sm text-foreground-950">{member.name}</h3>
-                  <p className="text-xs text-primary-600 dark:text-primary-400 font-medium mt-0.5 mb-2">{member.role}</p>
-                  <p className="text-xs text-foreground-500">{member.bio}</p>
-                </div>
-              ))}
-            </div>
-          </section>
+          {/* Team kaldırıldı — sahte isim/fotoğraf yok */}
 
           {/* CTA */}
           <section className="text-center bg-white dark:bg-background-100 rounded-2xl border border-background-200 p-8 md:p-12">

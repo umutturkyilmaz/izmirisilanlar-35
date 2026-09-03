@@ -73,7 +73,8 @@ export default function Navbar() {
     return location.pathname.startsWith(path);
   };
 
-  const profilePath = profile?.role === 'employer' ? '/profil/isveren' : '/profil/aday';
+  const profilePath =
+    profile?.role === 'admin' ? '/admin' : profile?.role === 'employer' ? '/profil/isveren' : '/profil/aday';
 
   const showVerificationWarning = profile?.role === 'employer' && profile.dogrulama_durumu !== 'verified';
 
@@ -175,7 +176,9 @@ export default function Navbar() {
                   <div className="absolute right-0 top-full mt-1 w-56 bg-background-50 dark:bg-background-100 rounded-xl border border-background-200 dark:border-background-200 shadow-lg py-1 z-50">
                     <div className="px-4 py-2 border-b border-background-200">
                       <p className="text-sm font-medium text-foreground-950">{profile.full_name}</p>
-                      <p className="text-xs text-foreground-500">{profile.role === 'employer' ? 'İşveren' : 'Aday'}</p>
+                      <p className="text-xs text-foreground-500">
+                        {profile.role === 'admin' ? 'Yönetici' : profile.role === 'employer' ? 'İşveren' : 'Aday'}
+                      </p>
                     </div>
                     <Link
                       to={profilePath}
@@ -228,7 +231,7 @@ export default function Navbar() {
               </div>
 
               {/* Post Job Button (employer) */}
-              {profile.role === 'employer' && (
+              {profile.role === 'employer' || profile.role === 'admin' ? (
                 <Link
                   to="/ilan-ekle"
                   className="hidden lg:inline-flex px-4 py-2 text-sm font-medium bg-accent-500 text-background-50 rounded-lg hover:bg-accent-600 transition-colors whitespace-nowrap"

@@ -47,7 +47,7 @@ const routes: RouteObject[] = [
   {
     path: "/ilan-ekle",
     element: (
-      <RequireAuth roles={["employer"]}>
+      <RequireAuth roles={["employer", "admin"]}>
         <PostJob />
       </RequireAuth>
     ),

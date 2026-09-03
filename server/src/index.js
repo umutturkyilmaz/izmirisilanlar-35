@@ -106,6 +106,10 @@ function optionalAuth(req, _res, next) {
   });
 }
 
+app.get('/', (_req, res) => {
+  res.json({ ok: true, service: 'izmir-api', health: '/api/health' });
+});
+
 app.get('/api/health', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -289,7 +293,19 @@ app.get('/api/jobs/stats', async (_req, res) => {
   const [companies] = await pool.query(
     `SELECT DISTINCT company_name FROM jobs WHERE status = 'active' AND company_name IS NOT NULL AND company_name != ''`,
   );
-  res.json({ activeJobs: jobs, companies: companies.length });
+  const [[{ c: employers }]] = await pool.query(
+    `SELECT COUNT(*) c FROM users WHERE role = 'employer' AND dogrulama_durumu = 'verified'`,
+  );
+  const [[{ c: candidates }]] = await pool.query(`SELECT COUNT(*) c FROM users WHERE role = 'candidate'`);
+  const [[{ c: apps }]] = await pool.query(
+    `SELECT COUNT(*) c FROM applications WHERE status IN ('accepted','reviewed')`,
+  );
+  res.json({
+    activeJobs: jobs,
+    companies: companies.length || employers,
+    candidates,
+    successfulApplications: apps,
+  });
 });
 
 app.get('/api/jobs/:id', optionalAuth, async (req, res) => {
@@ -308,12 +324,26 @@ app.post('/api/jobs', auth, async (req, res) => {
   if (!['employer', 'admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'İşveren gerekli' });
   }
+  if (req.user.role === 'employer' && req.user.dogrulama_durumu !== 'verified') {
+    return res.status(403).json({ error: 'İşveren hesabı henüz doğrulanmadı' });
+  }
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     const b = req.body || {};
+    const isAdmin = req.user.role === 'admin';
     let featured = Boolean(b.featured);
     let expiresAt = b.expires_at ? new Date(b.expires_at) : null;
+
+    if (!isAdmin && !b.credit_id) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Paket hakkı gerekli' });
+    }
+
+    if (isAdmin && !b.credit_id) {
+      const days = Number(b.duration_days) || 30;
+      expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    }
 
     if (b.credit_id) {
       const [creditRows] = await conn.query(

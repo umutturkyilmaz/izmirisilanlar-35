@@ -18,7 +18,7 @@ const common = {
   },
   hero: {
     title: 'İzmir\'de İdeal İşini Bul',
-    subtitle: 'İzmir ve tüm Türkiye\'den binlerce iş ilanı. Adaylar için ücretsiz, işverenler için güvenilir.',
+    subtitle: 'İzmir ve tüm Türkiye’den güncel iş ilanları. Adaylar için ücretsiz, işverenler için güvenilir.',
     searchPlaceholder: 'İş unvanı, şirket veya anahtar kelime...',
     searchLocationPlaceholder: 'Şehir seçin...',
     searchButton: 'İş Ara',
