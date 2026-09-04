@@ -126,6 +126,11 @@ export default function PostJobPage() {
 
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
+    if (isAdmin) {
+      if (!formData.title.trim()) errors.title = 'İlan başlığı girin';
+      setFormErrors(errors);
+      return Object.keys(errors).length === 0;
+    }
     if (!formData.title.trim()) errors.title = 'İlan başlığı zorunludur';
     else if (formData.title.trim().length < 5) errors.title = 'Başlık en az 5 karakter olmalıdır';
     if (!formData.category_id || formData.category_id === 0) errors.category_id = 'Kategori seçmelisiniz';
@@ -134,7 +139,7 @@ export default function PostJobPage() {
     if (!formData.company_name.trim()) errors.company_name = 'Şirket adı zorunludur';
     if (!formData.job_type) errors.job_type = 'Çalışma tipi seçmelisiniz';
     if (!formData.experience_level) errors.experience_level = 'Deneyim seviyesi seçmelisiniz';
-    if (!isAdmin && !selectedCreditId) errors.credit = 'Yayınlamak için paket hakkı seçmelisiniz';
+    if (!selectedCreditId) errors.credit = 'Yayınlamak için paket hakkı seçmelisiniz';
     const salaryMin = parseInt(formData.salary_min, 10);
     const salaryMax = parseInt(formData.salary_max, 10);
     if (formData.salary_min && isNaN(salaryMin)) errors.salary_min = 'Geçerli bir sayı giriniz';
@@ -164,14 +169,14 @@ export default function PostJobPage() {
       await api('/api/jobs', {
         body: {
           ...(isAdmin ? {} : { credit_id: selectedCreditId }),
-          title: formData.title.trim(),
-          category_id: formData.category_id,
-          sector: selectedCategory?.name || formData.sector || '',
-          description: formData.description.trim(),
-          company_name: formData.company_name.trim(),
+          title: formData.title.trim() || 'İlan',
+          category_id: formData.category_id || null,
+          sector: selectedCategory?.name || formData.sector || null,
+          description: formData.description.trim() || null,
+          company_name: formData.company_name.trim() || (isAdmin ? 'İzmir İş İlanları 35' : null),
           city: formData.city.trim() || null,
-          job_type: formData.job_type,
-          experience_level: formData.experience_level,
+          job_type: formData.job_type || null,
+          experience_level: formData.experience_level || null,
           salary_min: formData.salary_min ? parseInt(formData.salary_min, 10) : null,
           salary_max: formData.salary_max ? parseInt(formData.salary_max, 10) : null,
           requirements: filteredRequirements.length > 0 ? filteredRequirements : null,
@@ -328,12 +333,14 @@ export default function PostJobPage() {
             <section className="bg-white rounded-xl border border-background-200 p-5 space-y-4">
               <h2 className="font-heading font-bold text-base">Temel Bilgiler</h2>
               <div>
-                <label className="block text-sm font-medium mb-1.5">İlan Başlığı *</label>
+                <label className="block text-sm font-medium mb-1.5">
+                  İlan Başlığı{isAdmin ? '' : ' *'}
+                </label>
                 <input type="text" value={formData.title} onChange={(e) => updateField('title', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm" />
                 {formErrors.title && <p className="text-xs text-red-600 mt-1">{formErrors.title}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Kategori *</label>
+                <label className="block text-sm font-medium mb-1.5">Kategori</label>
                 <select value={formData.category_id} onChange={(e) => updateField('category_id', parseInt(e.target.value, 10))} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm">
                   <option value={0}>Seçiniz</option>
                   {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -341,8 +348,9 @@ export default function PostJobPage() {
                 {formErrors.category_id && <p className="text-xs text-red-600 mt-1">{formErrors.category_id}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Şirket Adı *</label>
+                <label className="block text-sm font-medium mb-1.5">Şirket Adı</label>
                 <input type="text" value={formData.company_name} onChange={(e) => updateField('company_name', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm" />
+                {formErrors.company_name && <p className="text-xs text-red-600 mt-1">{formErrors.company_name}</p>}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -373,7 +381,7 @@ export default function PostJobPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Açıklama *</label>
+                <label className="block text-sm font-medium mb-1.5">Açıklama</label>
                 <textarea rows={6} value={formData.description} onChange={(e) => updateField('description', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm resize-none" />
                 {formErrors.description && <p className="text-xs text-red-600 mt-1">{formErrors.description}</p>}
               </div>
@@ -406,10 +414,16 @@ export default function PostJobPage() {
             </section>
 
             <div className="flex flex-col sm:flex-row gap-3">
-              <button type="submit" disabled={submitting || remaining === 0} className="px-6 py-3 bg-primary-600 text-white font-semibold text-sm rounded-xl disabled:opacity-60">
+              <button
+                type="submit"
+                disabled={submitting || (!isAdmin && remaining === 0)}
+                className="px-6 py-3 bg-primary-600 text-white font-semibold text-sm rounded-xl disabled:opacity-60"
+              >
                 {submitting ? 'Gönderiliyor...' : 'İlanı Yayınla'}
               </button>
-              <Link to="/profil/isveren" className="px-6 py-3 border border-background-300 font-semibold text-sm rounded-xl text-center">Profile Dön</Link>
+              <Link to={isAdmin ? '/admin' : '/profil/isveren'} className="px-6 py-3 border border-background-300 font-semibold text-sm rounded-xl text-center">
+                {isAdmin ? 'Admin Paneline Dön' : 'Profile Dön'}
+              </Link>
             </div>
           </form>
         </div>
