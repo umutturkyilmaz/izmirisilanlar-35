@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
-import { ASSETS } from '@/lib/assets';
+import JobImage from '@/components/feature/JobImage';
 
 interface Job {
   id: string;
@@ -104,8 +104,8 @@ export default function FeaturedJobsSection() {
               >
                 <div className="flex flex-col sm:flex-row">
                   <div className="sm:w-40 md:w-48 h-40 sm:h-auto shrink-0">
-                    <img
-                      src={job.image_url || ASSETS.jobPlaceholder}
+                    <JobImage
+                      src={job.image_url}
                       alt={job.title}
                       className="w-full h-full object-cover"
                     />

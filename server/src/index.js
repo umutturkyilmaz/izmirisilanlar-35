@@ -259,11 +259,11 @@ app.post('/api/upload', auth, upload.single('file'), async (req, res) => {
   const filename = `${crypto.randomUUID()}${ext}`;
   const mime = req.file.mimetype || 'application/octet-stream';
   try {
-    await pool.query(`INSERT INTO uploaded_files (id, mime, data) VALUES (:id, :mime, :data)`, {
-      id: filename,
+    await pool.query('INSERT INTO uploaded_files (id, mime, data) VALUES (?, ?, ?)', [
+      filename,
       mime,
-      data: req.file.buffer,
-    });
+      req.file.buffer,
+    ]);
   } catch (e) {
     console.error('upload save', e.message);
     return res.status(500).json({ error: 'Dosya kaydedilemedi' });
@@ -328,7 +328,9 @@ app.get('/api/jobs', optionalAuth, async (req, res) => {
     }
     const sql = `SELECT * FROM jobs ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC LIMIT ${Math.min(Number(limit) || 50, 200)}`;
     const [rows] = await pool.query(sql, params);
-    res.json(rows.map(parseJob));
+    const jobs = rows.map(parseJob);
+    await sanitizeJobImages(jobs);
+    res.json(jobs);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -363,7 +365,9 @@ app.get('/api/jobs/:id', optionalAuth, async (req, res) => {
     req.user?.id === job.employer_id ||
     req.user?.role === 'admin';
   if (!can) return res.status(404).json({ error: 'İlan yok' });
-  res.json(parseJob(job));
+  const parsed = parseJob(job);
+  await sanitizeJobImages(parsed);
+  res.json(parsed);
 });
 
 app.post('/api/jobs', auth, async (req, res) => {
@@ -517,6 +521,43 @@ function parseJob(row) {
     }
   }
   return j;
+}
+
+function uploadFilenameFromUrl(url) {
+  const m = String(url || '').match(/\/uploads\/([^/?#]+)$/i);
+  return m ? m[1] : null;
+}
+
+/** Redeploy’da silinen disk dosyaları için kırık image_url’i temizle */
+async function sanitizeJobImages(jobs) {
+  const list = Array.isArray(jobs) ? jobs : jobs ? [jobs] : [];
+  if (!list.length) return jobs;
+  const names = [...new Set(list.map((j) => uploadFilenameFromUrl(j.image_url)).filter(Boolean))];
+  if (!names.length) return jobs;
+  let ok = new Set();
+  try {
+    const [rows] = await pool.query(
+      `SELECT id FROM uploaded_files WHERE id IN (${names.map(() => '?').join(',')})`,
+      names,
+    );
+    ok = new Set(rows.map((r) => r.id));
+  } catch (e) {
+    console.error('sanitizeJobImages', e.message);
+  }
+  const deadJobIds = [];
+  for (const j of list) {
+    const fn = uploadFilenameFromUrl(j.image_url);
+    if (!fn) continue;
+    if (ok.has(fn) || fs.existsSync(path.join(UPLOAD_DIR, fn))) continue;
+    j.image_url = null;
+    if (j.id) deadJobIds.push(j.id);
+  }
+  if (deadJobIds.length) {
+    pool
+      .query(`UPDATE jobs SET image_url = NULL WHERE id IN (${deadJobIds.map(() => '?').join(',')})`, deadJobIds)
+      .catch(() => {});
+  }
+  return jobs;
 }
 
 // ---- Applications ----

@@ -4,6 +4,7 @@ import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
+import JobImage from '@/components/feature/JobImage';
 import { ASSETS } from '@/lib/assets';
 import { createNotification } from '@/lib/notifications';
 import { checkRateLimit } from '@/lib/rateLimit';
@@ -248,9 +249,10 @@ export default function JobDetailPage() {
 
           <div className="bg-background-50 dark:bg-background-100 rounded-2xl border border-background-200 dark:border-background-200 overflow-hidden mb-6">
             <div className="h-40 md:h-56 w-full">
-              <img
-                src={job.image_url || ASSETS.jobDetailPlaceholder}
+              <JobImage
+                src={job.image_url}
                 alt={job.title}
+                placeholder={ASSETS.jobDetailPlaceholder}
                 className="w-full h-full object-cover"
               />
             </div>

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { api } from '@/lib/api';
-import { ASSETS } from '@/lib/assets';
+import JobImage from '@/components/feature/JobImage';
 
 interface Job {
   id: string;
@@ -421,8 +421,8 @@ export default function JobListingsPage() {
                       <div className="flex flex-col sm:flex-row gap-4">
                         {/* Image */}
                         <div className="w-full sm:w-24 md:w-28 h-24 sm:h-20 md:h-24 shrink-0 rounded-lg overflow-hidden">
-                          <img
-                            src={job.image_url || ASSETS.jobPlaceholder}
+                          <JobImage
+                            src={job.image_url}
                             alt={job.title}
                             className="w-full h-full object-cover"
                           />
