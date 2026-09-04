@@ -178,7 +178,7 @@ export default function JobListingsPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-12">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-12">
         {/* Page Header */}
         <div className="px-4 md:px-6 lg:px-8 max-w-6xl mx-auto mb-4 md:mb-6">
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">

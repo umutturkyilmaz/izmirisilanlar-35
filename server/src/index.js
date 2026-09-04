@@ -10,11 +10,21 @@ import crypto from 'crypto';
 import mysql from 'mysql2/promise';
 import { fileURLToPath } from 'url';
 import { isIyzicoReady, initializeCheckoutForm, retrieveCheckoutForm } from './iyzico.js';
+import {
+  isMailReady,
+  sendPasswordResetEmail,
+  sendContactAckEmail,
+  sendNewApplicationEmail,
+  sendEmployerVerifiedEmail,
+} from './mail.js';
+import { OAuth2Client } from 'google-auth-library';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8080);
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-change-me';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || JWT_SECRET === 'dev-change-me')) {
   console.error('FATAL: JWT_SECRET production ortamında zorunlu');
@@ -35,13 +45,43 @@ const pool = mysql.createPool({
   namedPlaceholders: true,
 });
 
-async function ensureUploadTable() {
+async function ensureSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS uploaded_files (
       id VARCHAR(80) PRIMARY KEY,
       mime VARCHAR(128) NOT NULL DEFAULT 'application/octet-stream',
       data LONGBLOB NOT NULL,
+      is_private TINYINT(1) NOT NULL DEFAULT 0,
+      owner_id CHAR(36) NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  for (const sql of [
+    `ALTER TABLE uploaded_files ADD COLUMN is_private TINYINT(1) NOT NULL DEFAULT 0`,
+    `ALTER TABLE uploaded_files ADD COLUMN owner_id CHAR(36) NULL`,
+    `ALTER TABLE users ADD COLUMN google_id VARCHAR(128) NULL`,
+    `ALTER TABLE users ADD UNIQUE INDEX uq_users_google (google_id)`,
+  ]) {
+    try {
+      await pool.query(sql);
+    } catch {
+      /* already exists */
+    }
+  }
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS password_resets (
+      token CHAR(64) PRIMARY KEY,
+      user_id CHAR(36) NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_pr_user (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS rate_limits (
+      id_key VARCHAR(191) PRIMARY KEY,
+      hit_count INT NOT NULL DEFAULT 0,
+      window_start DATETIME NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 }
@@ -78,14 +118,18 @@ const ALLOWED_UPLOAD_MIME = new Set([
 ]);
 const ALLOWED_UPLOAD_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf']);
 
-/** Disk + MySQL: Railway redeploy disk siler; DB kalıcıdır */
+/** Disk + MySQL: Railway redeploy disk siler; DB kalıcıdır. Private dosyalar /api/files üzerinden. */
 app.get('/uploads/:filename', async (req, res) => {
   const filename = path.basename(req.params.filename || '');
   if (!filename || filename.includes('..')) return res.status(400).end();
   try {
-    const [rows] = await pool.query('SELECT mime, data FROM uploaded_files WHERE id = :id LIMIT 1', {
-      id: filename,
-    });
+    const [rows] = await pool.query(
+      'SELECT mime, data, is_private FROM uploaded_files WHERE id = :id LIMIT 1',
+      { id: filename },
+    );
+    if (rows[0]?.is_private) {
+      return res.status(401).json({ error: 'Bu dosya için yetkili indirme gerekli' });
+    }
     if (rows[0]?.data) {
       res.setHeader('Content-Type', rows[0].mime || 'application/octet-stream');
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
@@ -113,19 +157,33 @@ const upload = multer({
   },
 });
 
-const contactHits = new Map();
-function contactRateLimit(ip) {
-  const now = Date.now();
-  const key = ip || 'unknown';
-  const row = contactHits.get(key) || { count: 0, start: now };
-  if (now - row.start > 60 * 60 * 1000) {
-    contactHits.set(key, { count: 1, start: now });
-    return true;
+async function checkRateLimitDb(key, maxHits, windowMs) {
+  const now = new Date();
+  const [rows] = await pool.query('SELECT hit_count, window_start FROM rate_limits WHERE id_key = ? LIMIT 1', [
+    key,
+  ]);
+  const row = rows[0];
+  if (!row) {
+    await pool.query('INSERT INTO rate_limits (id_key, hit_count, window_start) VALUES (?, 1, ?)', [key, now]);
+    return { ok: true };
   }
-  if (row.count >= 8) return false;
-  row.count += 1;
-  contactHits.set(key, row);
-  return true;
+  const start = new Date(row.window_start).getTime();
+  if (now.getTime() - start > windowMs) {
+    await pool.query('UPDATE rate_limits SET hit_count = 1, window_start = ? WHERE id_key = ?', [now, key]);
+    return { ok: true };
+  }
+  if (row.hit_count >= maxHits) {
+    const retryAfterSec = Math.ceil((windowMs - (now.getTime() - start)) / 1000);
+    return { ok: false, retryAfterSec };
+  }
+  await pool.query('UPDATE rate_limits SET hit_count = hit_count + 1 WHERE id_key = ?', [key]);
+  return { ok: true };
+}
+
+function filePublicOrPrivateUrl(req, filename, isPrivate) {
+  const base = (process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  if (isPrivate) return `${base}/api/files/${filename}`;
+  return `${base}/uploads/${filename}`;
 }
 
 function uid() {
@@ -190,7 +248,12 @@ app.get('/', (_req, res) => {
 app.get('/api/health', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
-    res.json({ ok: true, db: true });
+    res.json({
+      ok: true,
+      db: true,
+      mail: isMailReady(),
+      google: Boolean(GOOGLE_CLIENT_ID),
+    });
   } catch (e) {
     res.status(503).json({ ok: false, db: false, error: e.message });
   }
@@ -296,13 +359,121 @@ app.patch('/api/auth/profile', auth, async (req, res) => {
   }
 });
 
-app.post('/api/auth/forgot-password', async (_req, res) => {
-  // E-posta servisi henüz yok; kullanıcıya bilgi sızdırmamak için sabit cevap
-  res.json({
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const email = String(req.body?.email || '')
+    .trim()
+    .toLowerCase();
+  const generic = {
     ok: true,
     message:
-      'Bu e-posta kayıtlıysa sıfırlama talimatları gönderilir. E-posta servisi yakında aktif olacak; şimdilik destek ile iletişime geçin.',
-  });
+      'Bu e-posta kayıtlıysa sıfırlama bağlantısı gönderilir. Gelen kutusu ve spam klasörünü kontrol edin.',
+  };
+  if (!email) return res.json(generic);
+  try {
+    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip;
+    const rl = await checkRateLimitDb(`forgot:${ip}`, 5, 60 * 60 * 1000);
+    if (!rl.ok) return res.status(429).json({ error: 'Çok fazla istek', retryAfterSec: rl.retryAfterSec });
+
+    const [rows] = await pool.query('SELECT id, email FROM users WHERE email = :e LIMIT 1', { e: email });
+    const user = rows[0];
+    if (user && isMailReady()) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 60 * 60 * 1000);
+      await pool.query('DELETE FROM password_resets WHERE user_id = ?', [user.id]);
+      await pool.query('INSERT INTO password_resets (token, user_id, expires_at) VALUES (?, ?, ?)', [
+        token,
+        user.id,
+        expires,
+      ]);
+      await sendPasswordResetEmail(user.email, token);
+    }
+  } catch (e) {
+    console.error('forgot-password', e.message);
+  }
+  res.json(generic);
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const token = String(req.body?.token || '').trim();
+  const password = String(req.body?.password || '');
+  if (!token || password.length < 6) {
+    return res.status(400).json({ error: 'Geçerli token ve en az 6 karakter şifre gerekli' });
+  }
+  const [rows] = await pool.query(
+    'SELECT * FROM password_resets WHERE token = ? AND expires_at > NOW() LIMIT 1',
+    [token],
+  );
+  const row = rows[0];
+  if (!row) return res.status(400).json({ error: 'Bağlantı geçersiz veya süresi dolmuş' });
+  const hash = await bcrypt.hash(password, 10);
+  await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, row.user_id]);
+  await pool.query('DELETE FROM password_resets WHERE user_id = ?', [row.user_id]);
+  res.json({ ok: true, message: 'Şifreniz güncellendi. Giriş yapabilirsiniz.' });
+});
+
+app.get('/api/auth/google/status', (_req, res) => {
+  res.json({ enabled: Boolean(GOOGLE_CLIENT_ID), clientId: GOOGLE_CLIENT_ID || null });
+});
+
+app.post('/api/auth/google', async (req, res) => {
+  if (!googleClient || !GOOGLE_CLIENT_ID) {
+    return res.status(503).json({ error: 'Google girişi yapılandırılmamış (GOOGLE_CLIENT_ID)' });
+  }
+  try {
+    const credential = req.body?.credential;
+    if (!credential) return res.status(400).json({ error: 'credential gerekli' });
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    if (!payload?.email || !payload.sub) {
+      return res.status(401).json({ error: 'Google doğrulaması başarısız' });
+    }
+    const email = payload.email.toLowerCase();
+    const googleId = payload.sub;
+    const fullName = payload.name || null;
+    const avatar = payload.picture || null;
+    const roleWanted = ['candidate', 'employer'].includes(req.body?.role) ? req.body.role : 'candidate';
+
+    let [rows] = await pool.query(
+      'SELECT * FROM users WHERE google_id = :g OR email = :e LIMIT 1',
+      { g: googleId, e: email },
+    );
+    let user = rows[0];
+    if (!user) {
+      const id = uid();
+      const hash = await bcrypt.hash(crypto.randomUUID(), 10);
+      await pool.query(
+        `INSERT INTO users (id, email, password_hash, role, full_name, avatar_url, google_id, dogrulama_durumu)
+         VALUES (:id, :email, :hash, :role, :full_name, :avatar, :google_id, 'unverified')`,
+        {
+          id,
+          email,
+          hash,
+          role: roleWanted,
+          full_name: fullName,
+          avatar,
+          google_id: googleId,
+        },
+      );
+      [rows] = await pool.query('SELECT * FROM users WHERE id = :id', { id });
+      user = rows[0];
+    } else if (!user.google_id) {
+      await pool.query('UPDATE users SET google_id = :g, avatar_url = COALESCE(avatar_url, :a) WHERE id = :id', {
+        g: googleId,
+        a: avatar,
+        id: user.id,
+      });
+      [rows] = await pool.query('SELECT * FROM users WHERE id = :id', { id: user.id });
+      user = rows[0];
+    }
+    const token = signUser(user);
+    res.json({ token, user: profileRow(user), profile: profileRow(user) });
+  } catch (e) {
+    console.error('google auth', e.message);
+    res.status(401).json({ error: 'Google girişi başarısız' });
+  }
 });
 
 // ---- Upload ----
@@ -313,23 +484,59 @@ app.post('/api/upload', auth, (req, res) => {
     const ext = path.extname(req.file.originalname || '').slice(0, 12).toLowerCase();
     const filename = `${crypto.randomUUID()}${ext}`;
     const mime = req.file.mimetype || 'application/octet-stream';
+    const isPrivate =
+      req.query.private === '1' ||
+      req.query.private === 'true' ||
+      mime === 'application/pdf';
     try {
-      await pool.query('INSERT INTO uploaded_files (id, mime, data) VALUES (?, ?, ?)', [
-        filename,
-        mime,
-        req.file.buffer,
-      ]);
+      await pool.query(
+        'INSERT INTO uploaded_files (id, mime, data, is_private, owner_id) VALUES (?, ?, ?, ?, ?)',
+        [filename, mime, req.file.buffer, isPrivate ? 1 : 0, req.user.id],
+      );
     } catch (e) {
       console.error('upload save', e.message);
       return res.status(500).json({ error: 'Dosya kaydedilemedi' });
     }
-    try {
-      fs.writeFileSync(path.join(UPLOAD_DIR, filename), req.file.buffer);
-    } catch {
-      /* disk opsiyonel */
+    if (!isPrivate) {
+      try {
+        fs.writeFileSync(path.join(UPLOAD_DIR, filename), req.file.buffer);
+      } catch {
+        /* disk opsiyonel */
+      }
     }
-    res.json({ url: publicUrl(req, filename), filename });
+    res.json({
+      url: filePublicOrPrivateUrl(req, filename, isPrivate),
+      filename,
+      private: isPrivate,
+    });
   });
+});
+
+/** Private CV / dosya — sahibi, ilgili işveren veya admin */
+app.get('/api/files/:filename', auth, async (req, res) => {
+  const filename = path.basename(req.params.filename || '');
+  if (!filename) return res.status(400).json({ error: 'Dosya yok' });
+  const [rows] = await pool.query('SELECT * FROM uploaded_files WHERE id = ? LIMIT 1', [filename]);
+  const file = rows[0];
+  if (!file) return res.status(404).json({ error: 'Dosya bulunamadı' });
+  const isOwner = file.owner_id === req.user.id;
+  const isAdmin = req.user.role === 'admin';
+  let isEmployerViewer = false;
+  if (!isOwner && !isAdmin && req.user.role === 'employer') {
+    const [apps] = await pool.query(
+      `SELECT a.id FROM applications a
+       INNER JOIN jobs j ON j.id = a.job_id
+       WHERE j.employer_id = ? AND a.cv_url LIKE ? LIMIT 1`,
+      [req.user.id, `%${filename}%`],
+    );
+    isEmployerViewer = Boolean(apps[0]);
+  }
+  if (!isOwner && !isAdmin && !isEmployerViewer) {
+    return res.status(403).json({ error: 'Yetki yok' });
+  }
+  res.setHeader('Content-Type', file.mime || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+  res.send(file.data);
 });
 
 // ---- Categories ----
@@ -726,6 +933,8 @@ app.post('/api/applications', auth, async (req, res) => {
           link: '/profil/isveren',
         },
       );
+      const [empRows] = await pool.query('SELECT email FROM users WHERE id = ? LIMIT 1', [job.employer_id]);
+      void sendNewApplicationEmail(empRows[0]?.email, job.title);
     }
     res.status(201).json({ id });
   } catch (e) {
@@ -1097,8 +1306,12 @@ app.patch('/api/notifications/:id/read', auth, async (req, res) => {
 
 app.post('/api/contact', async (req, res) => {
   const ip = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip;
-  if (!contactRateLimit(ip)) {
-    return res.status(429).json({ error: 'Çok fazla istek. Lütfen sonra tekrar deneyin.' });
+  const rl = await checkRateLimitDb(`contact:${ip}`, 8, 60 * 60 * 1000);
+  if (!rl.ok) {
+    return res.status(429).json({
+      error: 'Çok fazla istek. Lütfen sonra tekrar deneyin.',
+      retryAfterSec: rl.retryAfterSec,
+    });
   }
   const id = uid();
   const { name, email, subject, message } = req.body || {};
@@ -1107,6 +1320,7 @@ app.post('/api/contact', async (req, res) => {
     `INSERT INTO contact_messages (id, name, email, subject, message) VALUES (:id, :name, :email, :subject, :message)`,
     { id, name, email, subject: subject || null, message },
   );
+  void sendContactAckEmail(email, name);
   res.status(201).json({ ok: true, message: 'Mesajınız kaydedildi. En kısa sürede dönüş yapılacak.' });
 });
 
@@ -1137,6 +1351,25 @@ app.patch('/api/admin/users/:id', auth, async (req, res) => {
         `UPDATE users SET dogrulama_durumu = :d, dogrulanma_tarihi = NOW() WHERE id = :id`,
         { d: dogrulama_durumu, id: req.params.id },
       );
+      const [urows] = await pool.query('SELECT email, company_name, full_name FROM users WHERE id = ?', [
+        req.params.id,
+      ]);
+      const u = urows[0];
+      if (u) {
+        const notifId = uid();
+        await pool.query(
+          `INSERT INTO notifications (id, user_id, title, body, link, \`read\`)
+           VALUES (?, ?, ?, ?, ?, 0)`,
+          [
+            notifId,
+            req.params.id,
+            'Hesabınız onaylandı',
+            'İşveren hesabınız doğrulandı. Artık ilan yayınlayabilirsiniz.',
+            '/ilan-ekle',
+          ],
+        );
+        void sendEmployerVerifiedEmail(u.email, u.company_name || u.full_name);
+      }
     } else {
       await pool.query(`UPDATE users SET dogrulama_durumu = :d WHERE id = :id`, {
         d: dogrulama_durumu,
@@ -1150,13 +1383,47 @@ app.patch('/api/admin/users/:id', auth, async (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/admin/repair-images', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const [jobs] = await pool.query('SELECT id, image_url FROM jobs WHERE image_url IS NOT NULL');
+  await sanitizeJobImages(jobs);
+  const cleared = jobs.filter((j) => j.image_url === null).length;
+  res.json({ checked: jobs.length, note: 'Kırık URL’ler temizlendi (sanitize)' });
+});
+
+app.delete('/api/jobs/:id', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Yalnızca admin silebilir' });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query('DELETE FROM applications WHERE job_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM favorites WHERE job_id = ?', [req.params.id]);
+    const [r] = await conn.query('DELETE FROM jobs WHERE id = ?', [req.params.id]);
+    await conn.commit();
+    if (!r.affectedRows) return res.status(404).json({ error: 'İlan yok' });
+    res.json({ ok: true });
+  } catch (e) {
+    await conn.rollback();
+    res.status(500).json({ error: e.message });
+  } finally {
+    conn.release();
+  }
+});
+
 app.get('/api/admin/stats', auth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
   const [[j]] = await pool.query(`SELECT COUNT(*) c FROM jobs`);
   const [[a]] = await pool.query(`SELECT COUNT(*) c FROM applications`);
   const [[e]] = await pool.query(`SELECT COUNT(*) c FROM users WHERE role = 'employer'`);
   const [[c]] = await pool.query(`SELECT COUNT(*) c FROM users WHERE role = 'candidate'`);
-  res.json({ jobs: j.c, applications: a.c, employers: e.c, candidates: c.c });
+  res.json({
+    jobs: j.c,
+    applications: a.c,
+    employers: e.c,
+    candidates: c.c,
+    mail: isMailReady(),
+    google: Boolean(GOOGLE_CLIENT_ID),
+  });
 });
 
 app.post('/api/jobs/expire', async (req, res) => {
@@ -1174,13 +1441,13 @@ app.post('/api/jobs/expire', async (req, res) => {
   res.json({ updated: r.affectedRows || 0 });
 });
 
-ensureUploadTable()
+ensureSchema()
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`API listening on :${PORT}`);
+      console.log(`API listening on :${PORT} mail=${isMailReady()} google=${Boolean(GOOGLE_CLIENT_ID)}`);
     });
   })
   .catch((e) => {
-    console.error('FATAL: uploaded_files tablosu oluşturulamadı', e.message);
+    console.error('FATAL: schema hazırlanamadı', e.message);
     process.exit(1);
   });

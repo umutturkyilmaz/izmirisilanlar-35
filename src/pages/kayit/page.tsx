@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
+import GoogleSignInButton from '@/components/feature/GoogleSignInButton';
 import { useAuth } from '@/hooks/useAuth';
 import { ASSETS } from '@/lib/assets';
+import { GOOGLE_CLIENT_ID } from '@/lib/site';
 
 export default function RegisterPage() {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
-  const { signUp } = useAuth();
+  const { signUp, signInWithGoogle } = useAuth();
   const [role, setRole] = useState<'candidate' | 'employer'>('candidate');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -22,6 +24,18 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const handleGoogle = useCallback(
+    async (credential: string) => {
+      setError('');
+      setIsLoading(true);
+      const result = await signInWithGoogle(credential, role);
+      setIsLoading(false);
+      if (result.success) navigate(role === 'employer' ? '/profil/isveren' : '/');
+      else setError(result.error || 'Google kaydı başarısız');
+    },
+    [navigate, role, signInWithGoogle],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -306,6 +320,20 @@ export default function RegisterPage() {
                   t('auth.registerButton')
                 )}
               </button>
+
+              {GOOGLE_CLIENT_ID && (
+                <div className="mt-4">
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-background-200" />
+                    </div>
+                    <div className="relative flex justify-center text-xs">
+                      <span className="px-2 bg-background-50 dark:bg-background-100 text-foreground-500">veya Google</span>
+                    </div>
+                  </div>
+                  <GoogleSignInButton onCredential={handleGoogle} disabled={isLoading} />
+                </div>
+              )}
 
               {/* Honeypot */}
               <input

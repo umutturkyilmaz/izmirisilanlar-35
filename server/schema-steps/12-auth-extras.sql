@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS password_resets (
+  token CHAR(64) PRIMARY KEY,
+  user_id CHAR(36) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_pr_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS rate_limits (
+  id_key VARCHAR(191) PRIMARY KEY,
+  hit_count INT NOT NULL DEFAULT 0,
+  window_start DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

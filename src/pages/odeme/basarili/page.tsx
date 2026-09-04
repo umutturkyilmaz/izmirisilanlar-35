@@ -100,7 +100,7 @@ export default function PaymentSuccessPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-16 flex items-center">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16 flex items-center">
         <div className="px-4 max-w-lg mx-auto text-center w-full">
           {loading ? (
             <p className="text-sm text-foreground-600">Ödeme durumu kontrol ediliyor…</p>

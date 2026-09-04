@@ -172,7 +172,7 @@ export default function CandidateProfilePage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-12">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-12">
         <div className="px-4 md:px-6 lg:px-8 max-w-4xl mx-auto">
           {/* Profile Header */}
           <div className="bg-background-50 dark:bg-background-100 rounded-2xl border border-background-200 dark:border-background-200 p-6 md:p-8 mb-6">

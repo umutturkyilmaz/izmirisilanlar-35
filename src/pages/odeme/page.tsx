@@ -124,7 +124,7 @@ export default function CheckoutPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-16">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <div className="px-4 md:px-6 lg:px-8 max-w-5xl mx-auto">
           <div className="mb-8">
             <Link to="/paketler" className="text-sm text-primary-600 hover:underline inline-flex items-center gap-1">

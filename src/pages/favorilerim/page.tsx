@@ -93,7 +93,7 @@ export default function FavoritesPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-12">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-12">
         <div className="px-4 md:px-6 lg:px-8 max-w-4xl mx-auto">
           <div className="mb-6">
             <h1 className="font-heading font-bold text-2xl md:text-3xl text-foreground-950">Favori İlanlarım</h1>

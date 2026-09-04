@@ -16,7 +16,7 @@ export default function PaymentCancelPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-16 flex items-center">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16 flex items-center">
         <div className="px-4 max-w-lg mx-auto text-center w-full">
           <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto mb-5">
             <i className="ri-close-line text-3xl text-amber-600" />

@@ -196,6 +196,36 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeleteJob = async (jobId: string) => {
+    if (!confirm('İlan kalıcı olarak silinecek. Emin misiniz?')) return;
+    setJobActionLoading(jobId);
+    setJobActionMsg(null);
+    try {
+      await api(`/api/jobs/${jobId}`, { method: 'DELETE' });
+      setJobActionMsg({ type: 'success', text: 'İlan silindi.' });
+      setJobDetailModal(null);
+      await fetchJobs();
+    } catch (err) {
+      setJobActionMsg({ type: 'error', text: err instanceof Error ? err.message : 'Silme başarısız.' });
+    } finally {
+      setJobActionLoading(null);
+    }
+  };
+
+  const handleRepairImages = async () => {
+    setJobActionMsg(null);
+    try {
+      const r = await api<{ checked: number }>('/api/admin/repair-images', { method: 'POST', body: {} });
+      setJobActionMsg({
+        type: 'success',
+        text: `Görsel onarımı tamamlandı (${r.checked} ilan tarandı). Kırık URL’ler temizlendi.`,
+      });
+      await fetchJobs();
+    } catch (err) {
+      setJobActionMsg({ type: 'error', text: err instanceof Error ? err.message : 'Onarım başarısız' });
+    }
+  };
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '—';
     return new Date(dateStr).toLocaleDateString('tr-TR', {
@@ -341,7 +371,7 @@ export default function AdminPage() {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />
-        <main className="flex-1 flex items-center justify-center px-4 pt-20 md:pt-24 pb-12">
+        <main className="flex-1 flex items-center justify-center px-4 pt-[var(--site-header-offset,5rem)] pb-12">
           <div className="text-center max-w-md">
             <div className="w-16 h-16 mx-auto rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
               <i className="ri-shield-cross-line text-2xl text-red-600 dark:text-red-400" />
@@ -363,7 +393,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background-50">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-16">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <div className="max-w-6xl mx-auto px-4 md:px-6">
           {/* Header */}
           <div className="mb-6">
@@ -583,6 +613,17 @@ export default function AdminPage() {
           {/* ==================== JOBS TAB ==================== */}
           {mainTab === 'jobs' && (
             <>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-foreground-500">Yayınlanan ilanları düzenleyin, kapatın veya silin.</p>
+                <button
+                  type="button"
+                  onClick={() => void handleRepairImages()}
+                  className="px-3 py-2 text-xs font-medium rounded-lg border border-background-200 hover:bg-background-100"
+                >
+                  <i className="ri-image-edit-line mr-1" />
+                  Kırık görselleri temizle
+                </button>
+              </div>
               {/* Job Action Msg */}
               {jobActionMsg && (
                 <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
@@ -728,6 +769,15 @@ export default function AdminPage() {
                                     {jobActionLoading === job.id ? <i className="ri-loader-4-line animate-spin text-sm" /> : <i className="ri-close-line text-sm" />}
                                   </button>
                                 )}
+                                <button
+                                  type="button"
+                                  onClick={() => void handleDeleteJob(job.id)}
+                                  disabled={jobActionLoading === job.id}
+                                  className="w-8 h-8 rounded-lg flex items-center justify-center text-foreground-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                                  title="Kalıcı sil"
+                                >
+                                  <i className="ri-delete-bin-line text-sm" />
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -927,6 +977,13 @@ export default function AdminPage() {
                     <i className="ri-close-line mr-1.5" />İlanı Kapat
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteJob(jobDetailModal.id)}
+                  className="flex-1 min-w-[140px] px-4 py-2.5 text-sm font-medium bg-foreground-800 text-white rounded-lg hover:bg-black transition-colors whitespace-nowrap"
+                >
+                  <i className="ri-delete-bin-line mr-1.5" />Kalıcı Sil
+                </button>
                 {(jobDetailModal.status === 'rejected' || jobDetailModal.status === 'closed' || jobDetailModal.status === 'expired') && (
                   <button onClick={() => setJobDetailModal(null)} className="flex-1 min-w-[140px] px-4 py-2.5 text-sm font-medium bg-background-100 dark:bg-background-200 text-foreground-700 rounded-lg hover:bg-background-200 dark:hover:bg-background-300 transition-colors whitespace-nowrap">
                     Kapat

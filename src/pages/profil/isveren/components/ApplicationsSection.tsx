@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
+import { openAuthedFile } from '@/lib/files';
 
 interface ApplicationFull {
   id: string;
@@ -334,14 +335,17 @@ export default function ApplicationsSection({ employerId }: ApplicationsSectionP
                         </a>
                       )}
                       {app.cv_url && (
-                        <a
-                          href={app.cv_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void openAuthedFile(app.cv_url!).catch((err) =>
+                              alert(err instanceof Error ? err.message : 'CV açılamadı'),
+                            );
+                          }}
                           className="text-primary-600 hover:underline font-medium"
                         >
                           <i className="ri-file-download-line mr-1" />CV indir
-                        </a>
+                        </button>
                       )}
                     </div>
                     {app.cover_letter && (

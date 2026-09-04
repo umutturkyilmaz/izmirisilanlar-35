@@ -33,11 +33,21 @@ UPDATE users SET role = 'admin' WHERE email = 'senin@email.com';
 ```
 
 ## Kontrol
-- `GET https://API/api/health` → `{"ok":true,"db":true}`
+- `GET https://API/api/health` → `ok`, `db`, `mail`, `google`
 - Sitede kayıt / giriş / ilan listesi
+
+## E-posta (API Variables)
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
+
+## Google giriş
+API `GOOGLE_CLIENT_ID` + Web `VITE_GOOGLE_CLIENT_ID` (aynı). Google Cloud OAuth Web client.
+
+## Sosyal (Web)
+`VITE_SOCIAL_INSTAGRAM`, `VITE_SOCIAL_TWITTER`, `VITE_SOCIAL_LINKEDIN`
 
 ## Upload kalıcılığı (Railway)
 API servisinde görseller MySQL’de saklanır (otomatik tablo). Volume artık zorunlu değil.
+CV private: `/api/files/...` (auth).
 Redeploy olmadan dosyalar korunur.
 
 ## Lokal geliştirme

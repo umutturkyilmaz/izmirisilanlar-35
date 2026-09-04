@@ -59,10 +59,11 @@ export async function api<T = unknown>(path: string, opts: Opts = {}): Promise<T
   return data as T;
 }
 
-export async function uploadFile(file: File): Promise<string> {
+export async function uploadFile(file: File, opts?: { private?: boolean }): Promise<string> {
   const fd = new FormData();
   fd.append('file', file);
-  const data = await api<{ url: string }>('/api/upload', { method: 'POST', formData: fd });
+  const q = opts?.private ? '?private=1' : '';
+  const data = await api<{ url: string }>(`/api/upload${q}`, { method: 'POST', formData: fd });
   return data.url;
 }
 

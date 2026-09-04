@@ -12,7 +12,7 @@ function LegalLayout({ title, children }: LegalProps) {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-16">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <article className="px-4 md:px-6 lg:px-8 max-w-3xl mx-auto">
           <h1 className="font-heading text-2xl md:text-3xl font-bold text-foreground-950 mb-2">{title}</h1>
           <p className="text-xs text-foreground-500 mb-8">Son güncelleme: 25 Ağustos 2026</p>

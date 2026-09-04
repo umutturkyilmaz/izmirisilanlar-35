@@ -57,7 +57,7 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-16">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
 
         {/* Hero Banner */}
         <section className="relative w-full h-[320px] md:h-[400px] overflow-hidden mb-16">

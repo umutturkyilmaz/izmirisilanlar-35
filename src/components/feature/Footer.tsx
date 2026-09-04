@@ -1,9 +1,15 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ASSETS } from '@/lib/assets';
+import { SOCIAL_LINKS } from '@/lib/site';
 
 export default function Footer() {
   const { t } = useTranslation('common');
+  const social = [
+    { href: SOCIAL_LINKS.instagram, icon: 'ri-instagram-line', label: 'Instagram' },
+    { href: SOCIAL_LINKS.twitter, icon: 'ri-twitter-x-line', label: 'X' },
+    { href: SOCIAL_LINKS.linkedin, icon: 'ri-linkedin-line', label: 'LinkedIn' },
+  ].filter((s) => s.href);
 
   return (
     <footer className="bg-background-100 dark:bg-background-100 border-t border-background-200 dark:border-background-200">
@@ -24,29 +30,22 @@ export default function Footer() {
             <p className="text-sm text-foreground-600 dark:text-foreground-600 leading-relaxed max-w-xs">
               {t('footer.description')}
             </p>
-            <div className="flex items-center gap-3 mt-4">
-              <span
-                className="w-9 h-9 rounded-full bg-background-200 dark:bg-background-200 flex items-center justify-center text-foreground-400"
-                aria-label="Instagram (yakında)"
-                title="Yakında"
-              >
-                <i className="ri-instagram-line text-lg" />
-              </span>
-              <span
-                className="w-9 h-9 rounded-full bg-background-200 dark:bg-background-200 flex items-center justify-center text-foreground-400"
-                aria-label="Twitter (yakında)"
-                title="Yakında"
-              >
-                <i className="ri-twitter-x-line text-lg" />
-              </span>
-              <span
-                className="w-9 h-9 rounded-full bg-background-200 dark:bg-background-200 flex items-center justify-center text-foreground-400"
-                aria-label="LinkedIn (yakında)"
-                title="Yakında"
-              >
-                <i className="ri-linkedin-line text-lg" />
-              </span>
-            </div>
+            {social.length > 0 && (
+              <div className="flex items-center gap-3 mt-4">
+                {social.map((s) => (
+                  <a
+                    key={s.label}
+                    href={s.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-9 h-9 rounded-full bg-background-200 dark:bg-background-200 flex items-center justify-center text-foreground-600 hover:bg-primary-500 hover:text-background-50 transition-colors"
+                    aria-label={s.label}
+                  >
+                    <i className={`${s.icon} text-lg`} />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Candidates */}

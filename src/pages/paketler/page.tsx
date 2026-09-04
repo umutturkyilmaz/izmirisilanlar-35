@@ -7,7 +7,7 @@ export default function PackagesPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-16">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <section className="px-4 md:px-6 lg:px-8 max-w-6xl mx-auto">
           <div className="text-center max-w-2xl mx-auto mb-10 md:mb-14">
             <p className="text-sm font-medium text-primary-600 mb-2">İşveren Hizmetleri</p>

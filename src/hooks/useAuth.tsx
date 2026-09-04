@@ -39,7 +39,7 @@ interface AuthState {
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ success: boolean; error?: string }>;
-  signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogle: (credential: string, role?: 'candidate' | 'employer') => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -150,10 +150,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signInWithGoogle = async () => ({
-    success: false,
-    error: 'Google girişi MySQL API aşamasında kapalı. E-posta ile giriş kullanın.',
-  });
+  const signInWithGoogle = async (credential: string, role?: 'candidate' | 'employer') => {
+    try {
+      const data = await api<{ token: string; user: Profile; profile: Profile }>('/api/auth/google', {
+        body: { credential, role },
+        auth: false,
+      });
+      setToken(data.token);
+      setUser(data.user);
+      setProfile(data.profile);
+      setSession({ access_token: data.token });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : 'Google girişi başarısız' };
+    }
+  };
 
   return (
     <AuthContext.Provider

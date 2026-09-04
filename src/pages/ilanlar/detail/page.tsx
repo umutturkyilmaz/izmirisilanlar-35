@@ -230,7 +230,7 @@ export default function JobDetailPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-12">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-12">
         <div className="px-4 md:px-6 lg:px-8 max-w-4xl mx-auto">
           {favMsg && (
             <div className="mb-3 px-3 py-2 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200">

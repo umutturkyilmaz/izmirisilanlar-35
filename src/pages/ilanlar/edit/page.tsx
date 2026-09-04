@@ -191,7 +191,7 @@ export default function EditJobPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-16">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <div className="max-w-2xl mx-auto px-4">
           <Link to={backHref} className="text-sm text-primary-600 hover:underline">
             {backLabel}

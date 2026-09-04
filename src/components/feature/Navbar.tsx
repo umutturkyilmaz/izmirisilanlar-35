@@ -78,35 +78,42 @@ export default function Navbar() {
 
   const showVerificationWarning = profile?.role === 'employer' && profile.dogrulama_durumu !== 'verified';
 
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--site-header-offset',
+      showVerificationWarning ? '7.25rem' : '5rem',
+    );
+  }, [showVerificationWarning]);
+
   return (
     <>
-      {/* Verification Warning Banner for Employers */}
-      {showVerificationWarning && (
-        <div className="sticky top-0 z-[60] bg-yellow-50 dark:bg-yellow-900/30 border-b border-yellow-200 dark:border-yellow-700">
-          <div className="px-4 md:px-6 lg:px-8 py-2 flex items-center justify-center gap-2">
-            <i className="ri-shield-cross-line text-yellow-700 dark:text-yellow-400 text-sm" />
-            <p className="text-xs md:text-sm text-yellow-800 dark:text-yellow-300 font-medium">
-              {profile.dogrulama_durumu === 'pending'
-                ? 'Kimlik doğrulamanız inceleniyor. Onaylanana kadar ilan veremezsiniz.'
-                : profile.dogrulama_durumu === 'rejected'
-                  ? 'Kimlik doğrulamanız reddedildi. Lütfen profilinizi güncelleyin.'
-                  : 'İlan vermek için kimlik doğrulaması zorunludur. Vergi numaranızı profil sayfanızdan girin.'}
-            </p>
-            <Link
-              to="/profil/isveren"
-              className="ml-2 px-3 py-1 text-xs font-medium bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded-md hover:bg-yellow-300 dark:hover:bg-yellow-700 transition-colors whitespace-nowrap"
-            >
-              Profile Git
-            </Link>
+      <div className="fixed top-0 left-0 right-0 z-50">
+        {showVerificationWarning && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/30 border-b border-yellow-200 dark:border-yellow-700">
+            <div className="px-4 md:px-6 lg:px-8 py-2 flex items-center justify-center gap-2 flex-wrap">
+              <i className="ri-shield-cross-line text-yellow-700 dark:text-yellow-400 text-sm" />
+              <p className="text-xs md:text-sm text-yellow-800 dark:text-yellow-300 font-medium text-center">
+                {profile.dogrulama_durumu === 'pending'
+                  ? 'Kimlik doğrulamanız inceleniyor. Onaylanana kadar ilan veremezsiniz.'
+                  : profile.dogrulama_durumu === 'rejected'
+                    ? 'Kimlik doğrulamanız reddedildi. Lütfen profilinizi güncelleyin.'
+                    : 'İlan vermek için kimlik doğrulaması zorunludur. Vergi numaranızı profil sayfanızdan girin.'}
+              </p>
+              <Link
+                to="/profil/isveren"
+                className="px-3 py-1 text-xs font-medium bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded-md hover:bg-yellow-300 dark:hover:bg-yellow-700 transition-colors whitespace-nowrap"
+              >
+                Profile Git
+              </Link>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      className={`transition-all duration-300 ${
         isScrolled
           ? 'bg-background-50/95 backdrop-blur-md shadow-sm dark:bg-background-100/95'
-          : 'bg-transparent'
+          : 'bg-background-50/90 dark:bg-background-100/90 backdrop-blur-sm'
       }`}
     >
       <nav className="flex items-center justify-between px-4 md:px-6 lg:px-8 py-3 md:py-4">
@@ -380,6 +387,7 @@ export default function Navbar() {
         </div>
       )}
     </header>
+      </div>
     </>
   );
 }

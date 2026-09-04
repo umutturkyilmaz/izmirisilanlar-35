@@ -227,7 +227,7 @@ export default function PostJobPage() {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />
-        <main className="flex-1 flex items-center justify-center px-4 pt-20 md:pt-24 pb-12">
+        <main className="flex-1 flex items-center justify-center px-4 pt-[var(--site-header-offset,5rem)] pb-12">
           <div className="text-center max-w-md">
             <h1 className="font-heading font-bold text-xl text-foreground-950 mb-2">İlan Vermek İçin Giriş Yapın</h1>
             <p className="text-sm text-foreground-600 mb-5">İş ilanı yayınlamak için giriş yapmalısınız.</p>
@@ -246,7 +246,7 @@ export default function PostJobPage() {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />
-        <main className="flex-1 flex items-center justify-center px-4 pt-20 md:pt-24 pb-12">
+        <main className="flex-1 flex items-center justify-center px-4 pt-[var(--site-header-offset,5rem)] pb-12">
           <div className="text-center max-w-md">
             <h1 className="font-heading font-bold text-xl text-foreground-950 mb-2">Sadece İşverenler İlan Verebilir</h1>
             <Link to="/kayit" className="px-6 py-2.5 bg-primary-500 text-white font-medium text-sm rounded-lg">İşveren Olarak Kayıt Ol</Link>
@@ -261,7 +261,7 @@ export default function PostJobPage() {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />
-        <main className="flex-1 flex items-center justify-center px-4 pt-20 md:pt-24 pb-12">
+        <main className="flex-1 flex items-center justify-center px-4 pt-[var(--site-header-offset,5rem)] pb-12">
           <div className="text-center max-w-md">
             <h1 className="font-heading font-bold text-xl text-foreground-950 mb-2">Kimlik Doğrulaması Gerekli</h1>
             <p className="text-sm text-foreground-600 mb-5">İlan vermek için hesabınızın doğrulanması gerekir.</p>
@@ -276,7 +276,7 @@ export default function PostJobPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background-50">
       <Navbar />
-      <main className="flex-1 pt-20 md:pt-24 pb-16">
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <div className="max-w-3xl mx-auto px-4 md:px-6">
           <div className="mb-8">
             <h1 className="font-heading font-bold text-2xl text-foreground-950">Yeni İş İlanı Yayınla</h1>

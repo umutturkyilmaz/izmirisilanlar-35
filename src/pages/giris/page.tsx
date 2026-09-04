@@ -1,19 +1,33 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
+import GoogleSignInButton from '@/components/feature/GoogleSignInButton';
 import { useAuth } from '@/hooks/useAuth';
 import { ASSETS } from '@/lib/assets';
+import { GOOGLE_CLIENT_ID } from '@/lib/site';
 
 export default function LoginPage() {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const handleGoogle = useCallback(
+    async (credential: string) => {
+      setError('');
+      setIsLoading(true);
+      const result = await signInWithGoogle(credential);
+      setIsLoading(false);
+      if (result.success) navigate('/');
+      else setError(result.error || 'Google girişi başarısız');
+    },
+    [navigate, signInWithGoogle],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,6 +137,20 @@ export default function LoginPage() {
                   t('auth.loginButton')
                 )}
               </button>
+
+              {GOOGLE_CLIENT_ID && (
+                <div className="mt-4">
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-background-200" />
+                    </div>
+                    <div className="relative flex justify-center text-xs">
+                      <span className="px-2 bg-background-50 dark:bg-background-100 text-foreground-500">veya</span>
+                    </div>
+                  </div>
+                  <GoogleSignInButton onCredential={handleGoogle} disabled={isLoading} />
+                </div>
+              )}
 
               {/* Honeypot */}
               <input
