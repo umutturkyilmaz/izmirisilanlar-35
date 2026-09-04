@@ -334,6 +334,13 @@ app.post('/api/jobs', auth, async (req, res) => {
     const isAdmin = req.user.role === 'admin';
     let featured = Boolean(b.featured);
     let expiresAt = b.expires_at ? new Date(b.expires_at) : null;
+    const title = String(b.title || '').trim() || (isAdmin ? 'İlan' : '');
+    if (!title) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'İlan başlığı gerekli' });
+    }
+    const categoryRaw = Number(b.category_id);
+    const categoryId = Number.isFinite(categoryRaw) && categoryRaw > 0 ? categoryRaw : null;
 
     if (!isAdmin && !b.credit_id) {
       await conn.rollback();
@@ -345,7 +352,7 @@ app.post('/api/jobs', auth, async (req, res) => {
       expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     }
 
-    if (b.credit_id) {
+    if (b.credit_id && !isAdmin) {
       const [creditRows] = await conn.query(
         `SELECT * FROM employer_credits WHERE id = :id AND employer_id = :uid AND remaining > 0 LIMIT 1 FOR UPDATE`,
         { id: b.credit_id, uid: req.user.id },
@@ -373,11 +380,11 @@ app.post('/api/jobs', auth, async (req, res) => {
       {
         id,
         employer_id: req.user.id,
-        title: b.title,
-        category_id: b.category_id || null,
+        title,
+        category_id: categoryId,
         sector: b.sector || null,
         description: b.description || null,
-        company_name: b.company_name || null,
+        company_name: b.company_name || (isAdmin ? 'İzmir İş İlanları 35' : null),
         city: b.city || null,
         job_type: b.job_type || null,
         experience_level: b.experience_level || null,
@@ -386,7 +393,7 @@ app.post('/api/jobs', auth, async (req, res) => {
         requirements: b.requirements ? JSON.stringify(b.requirements) : null,
         benefits: b.benefits ? JSON.stringify(b.benefits) : null,
         image_url: b.image_url || null,
-        status: b.status || 'pending',
+        status: isAdmin ? b.status || 'active' : b.status || 'pending',
         featured: featured ? 1 : 0,
         expires_at: expiresAt,
       },
@@ -396,7 +403,8 @@ app.post('/api/jobs', auth, async (req, res) => {
     res.status(201).json(parseJob(rows[0]));
   } catch (e) {
     await conn.rollback();
-    res.status(500).json({ error: e.message });
+    console.error('POST /api/jobs', e);
+    res.status(500).json({ error: e.message || 'İlan kaydedilemedi' });
   } finally {
     conn.release();
   }

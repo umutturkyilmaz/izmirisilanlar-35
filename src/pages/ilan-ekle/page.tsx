@@ -164,13 +164,15 @@ export default function PostJobPage() {
 
       const filteredRequirements = requirements.filter((r) => r.trim() !== '');
       const filteredBenefits = benefits.filter((b) => b.trim() !== '');
-      const selectedCategory = categories.find((c) => c.id === formData.category_id);
+      const catId = Number(formData.category_id);
+      const categoryId = Number.isFinite(catId) && catId > 0 ? catId : null;
+      const selectedCategory = categories.find((c) => c.id === categoryId);
 
       await api('/api/jobs', {
         body: {
           ...(isAdmin ? {} : { credit_id: selectedCreditId }),
-          title: formData.title.trim() || 'İlan',
-          category_id: formData.category_id || null,
+          title: formData.title.trim() || (isAdmin ? 'İlan' : ''),
+          category_id: categoryId,
           sector: selectedCategory?.name || formData.sector || null,
           description: formData.description.trim() || null,
           company_name: formData.company_name.trim() || (isAdmin ? 'İzmir İş İlanları 35' : null),
@@ -183,7 +185,7 @@ export default function PostJobPage() {
           benefits: filteredBenefits.length > 0 ? filteredBenefits : null,
           image_url: imageUrl,
           status: isAdmin ? 'active' : 'pending',
-          featured: isAdmin ? adminFeatured : undefined,
+          featured: isAdmin ? adminFeatured : false,
           duration_days: isAdmin ? adminDays : undefined,
         },
       });
