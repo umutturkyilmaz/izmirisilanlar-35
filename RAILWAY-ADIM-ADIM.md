@@ -211,13 +211,12 @@ Cloudflare: turuncu bulut (Proxied) + SSL **Full**.
 
 ---
 
-## İsteğe bağlı — Upload kalıcılığı
+## Upload kalıcılığı
 
-API servisi → **Volumes** → Add Volume  
-Mount: `/data/uploads`  
-Variable: `UPLOAD_DIR=/data/uploads`
+Görseller MySQL `uploaded_files` tablosunda saklanır (redeploy sonrası da kalır).
+API açılışında tablo otomatik oluşturulur.
 
-Yoksa yüklenen görseller redeploy'da silinir.
+İsteğe bağlı disk cache: Volumes → Mount `/data/uploads` + `UPLOAD_DIR=/data/uploads`
 
 ---
 

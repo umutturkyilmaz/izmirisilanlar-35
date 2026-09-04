@@ -35,19 +35,47 @@ const pool = mysql.createPool({
   namedPlaceholders: true,
 });
 
+async function ensureUploadTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS uploaded_files (
+      id VARCHAR(80) PRIMARY KEY,
+      mime VARCHAR(128) NOT NULL DEFAULT 'application/octet-stream',
+      data LONGBLOB NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+}
+
 const app = express();
+app.set('trust proxy', 1);
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
-app.use('/uploads', express.static(UPLOAD_DIR));
+
+/** Disk + MySQL: Railway redeploy disk siler; DB kalıcıdır */
+app.get('/uploads/:filename', async (req, res) => {
+  const filename = path.basename(req.params.filename || '');
+  if (!filename || filename.includes('..')) return res.status(400).end();
+  try {
+    const [rows] = await pool.query('SELECT mime, data FROM uploaded_files WHERE id = :id LIMIT 1', {
+      id: filename,
+    });
+    if (rows[0]?.data) {
+      res.setHeader('Content-Type', rows[0].mime || 'application/octet-stream');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.send(rows[0].data);
+    }
+  } catch (e) {
+    console.error('upload serve db', e.message);
+  }
+  const fp = path.join(UPLOAD_DIR, filename);
+  if (fs.existsSync(fp)) {
+    return res.sendFile(fp);
+  }
+  return res.status(404).json({ error: 'Dosya bulunamadı' });
+});
 
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname || '').slice(0, 12);
-      cb(null, `${crypto.randomUUID()}${ext}`);
-    },
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
 });
 
@@ -225,9 +253,27 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 });
 
 // ---- Upload ----
-app.post('/api/upload', auth, upload.single('file'), (req, res) => {
+app.post('/api/upload', auth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Dosya yok' });
-  res.json({ url: publicUrl(req, req.file.filename), filename: req.file.filename });
+  const ext = path.extname(req.file.originalname || '').slice(0, 12).toLowerCase();
+  const filename = `${crypto.randomUUID()}${ext}`;
+  const mime = req.file.mimetype || 'application/octet-stream';
+  try {
+    await pool.query(`INSERT INTO uploaded_files (id, mime, data) VALUES (:id, :mime, :data)`, {
+      id: filename,
+      mime,
+      data: req.file.buffer,
+    });
+  } catch (e) {
+    console.error('upload save', e.message);
+    return res.status(500).json({ error: 'Dosya kaydedilemedi' });
+  }
+  try {
+    fs.writeFileSync(path.join(UPLOAD_DIR, filename), req.file.buffer);
+  } catch {
+    /* disk opsiyonel */
+  }
+  res.json({ url: publicUrl(req, filename), filename });
 });
 
 // ---- Categories ----
@@ -909,6 +955,13 @@ app.post('/api/jobs/expire', async (req, res) => {
   res.json({ updated: r.affectedRows || 0 });
 });
 
-app.listen(PORT, () => {
-  console.log(`API listening on :${PORT}`);
-});
+ensureUploadTable()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`API listening on :${PORT}`);
+    });
+  })
+  .catch((e) => {
+    console.error('FATAL: uploaded_files tablosu oluşturulamadı', e.message);
+    process.exit(1);
+  });

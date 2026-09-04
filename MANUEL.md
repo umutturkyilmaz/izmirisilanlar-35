@@ -37,8 +37,7 @@ UPDATE users SET role = 'admin' WHERE email = 'senin@email.com';
 - Sitede kayıt / giriş / ilan listesi
 
 ## Upload kalıcılığı (Railway)
-API servisinde Volume ekle → mount path `/data/uploads`  
-Variable: `UPLOAD_DIR=/data/uploads`  
+API servisinde görseller MySQL’de saklanır (otomatik tablo). Volume artık zorunlu değil.
 Redeploy olmadan dosyalar korunur.
 
 ## Lokal geliştirme

@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   CONSTRAINT fk_notif_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ========== 9/9 contact_messages ==========
+-- ========== 9/10 contact_messages ==========
 CREATE TABLE IF NOT EXISTS contact_messages (
   id CHAR(36) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
@@ -147,7 +147,15 @@ CREATE TABLE IF NOT EXISTS contact_messages (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ========== 10/10 kategoriler (seed) ==========
+-- ========== 10/11 uploaded_files (kalıcı görseller) ==========
+CREATE TABLE IF NOT EXISTS uploaded_files (
+  id VARCHAR(80) PRIMARY KEY,
+  mime VARCHAR(128) NOT NULL DEFAULT 'application/octet-stream',
+  data LONGBLOB NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ========== 11/11 kategoriler (seed) ==========
 INSERT IGNORE INTO job_categories (name, icon, sort_order) VALUES
   ('Teknoloji', 'ri-code-s-slash-line', 1),
   ('Satis & Pazarlama', 'ri-megaphone-line', 2),
