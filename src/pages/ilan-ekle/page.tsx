@@ -305,7 +305,9 @@ export default function PostJobPage() {
             <div className="mb-6 p-4 rounded-xl border border-amber-200 bg-amber-50 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
               <div>
                 <p className="text-sm font-semibold text-foreground-950">Aktif paket hakkınız yok</p>
-                <p className="text-xs text-foreground-600 mt-0.5">Önce paket satın alın. Canlı ödeme iyzico onayı sonrası açılacak.</p>
+                <p className="text-xs text-foreground-600 mt-0.5">
+                  İlan yayınlamak için paket satın alın. Satın alma sonrası hakkınız burada görünür.
+                </p>
               </div>
               <Link to="/paketler" className="shrink-0 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-semibold">Paketleri Gör</Link>
             </div>
@@ -329,7 +331,7 @@ export default function PostJobPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className={`space-y-6 ${!isAdmin && remaining === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
+          <form onSubmit={handleSubmit} className="space-y-6">
             <section className="bg-white rounded-xl border border-background-200 p-5 space-y-4">
               <h2 className="font-heading font-bold text-base">Temel Bilgiler</h2>
               <div>
@@ -416,7 +418,7 @@ export default function PostJobPage() {
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 type="submit"
-                disabled={submitting || (!isAdmin && remaining === 0)}
+                disabled={submitting}
                 className="px-6 py-3 bg-primary-600 text-white font-semibold text-sm rounded-xl disabled:opacity-60"
               >
                 {submitting ? 'Gönderiliyor...' : 'İlanı Yayınla'}
