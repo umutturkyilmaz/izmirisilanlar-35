@@ -110,10 +110,10 @@ export default function Navbar() {
         )}
 
     <header
-      className={`transition-all duration-300 ${
+      className={`border-b border-background-200/80 transition-shadow duration-300 ${
         isScrolled
-          ? 'bg-background-50/95 backdrop-blur-md shadow-sm dark:bg-background-100/95'
-          : 'bg-background-50/90 dark:bg-background-100/90 backdrop-blur-sm'
+          ? 'bg-background-50 shadow-sm dark:bg-background-100'
+          : 'bg-background-50 dark:bg-background-100'
       }`}
     >
       <nav className="flex items-center justify-between px-4 md:px-6 lg:px-8 py-3 md:py-4">
@@ -124,7 +124,7 @@ export default function Navbar() {
             alt={t('brand')}
             className="h-10 w-auto object-contain"
           />
-          <span className="hidden sm:block font-heading font-bold text-lg md:text-xl text-foreground-950 dark:text-foreground-950">
+          <span className="hidden sm:block font-heading font-bold text-lg md:text-xl text-foreground-950">
             {t('brand')}
           </span>
         </Link>
@@ -137,8 +137,8 @@ export default function Navbar() {
               to={link.path}
               className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                 isActive(link.path)
-                  ? 'text-primary-600 bg-primary-50/60 dark:text-primary-400 dark:bg-primary-900/20'
-                  : 'text-foreground-700 hover:text-primary-600 hover:bg-primary-50/40 dark:text-foreground-700 dark:hover:text-primary-400'
+                  ? 'text-primary-700 bg-primary-100 dark:text-primary-300 dark:bg-primary-900/40'
+                  : 'text-foreground-800 hover:text-primary-700 hover:bg-background-100 dark:text-foreground-200 dark:hover:text-primary-300 dark:hover:bg-background-200'
               }`}
             >
               {link.label}
@@ -152,7 +152,7 @@ export default function Navbar() {
           {/* Dark Mode Toggle */}
           <button
             onClick={toggleDark}
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-foreground-600 hover:bg-background-200 transition-colors"
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-foreground-700 hover:bg-background-200 transition-colors dark:text-foreground-200"
             aria-label={isDark ? t('common.lightMode') : t('common.darkMode')}
           >
             {isDark ? (
@@ -173,7 +173,7 @@ export default function Navbar() {
                   <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold text-sm">
                     {profile.full_name?.charAt(0)?.toUpperCase() || 'K'}
                   </div>
-                  <span className="text-sm font-medium text-foreground-700 max-w-[100px] truncate">
+                  <span className="text-sm font-medium text-foreground-800 max-w-[100px] truncate dark:text-foreground-200">
                     {profile.full_name || 'Kullanıcı'}
                   </span>
                   <i className={`${isProfileMenuOpen ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} text-foreground-500 text-sm`} />
