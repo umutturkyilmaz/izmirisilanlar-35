@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import ApplicationsSection from '@/pages/profil/isveren/components/ApplicationsSection';
-import { fetchCredits, consumeCredit } from '@/lib/credits';
+import { fetchCredits } from '@/lib/credits';
 import { downloadInvoicePdf } from '@/lib/invoice';
 
 interface JobListing {
@@ -36,18 +36,25 @@ interface ApplicationItem {
 
 export default function EmployerProfilePage() {
   const { user, profile, updateProfile, loading } = useAuth();
+  const location = useLocation();
   const [isEditing, setIsEditing] = useState(false);
   const [myJobs, setMyJobs] = useState<JobListing[]>([]);
   const [jobsLoading, setJobsLoading] = useState(true);
   const [appsLoading, setAppsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
-  const [tab, setTab] = useState<'profile' | 'jobs' | 'applications'>('profile');
+  const [tab, setTab] = useState<'profile' | 'jobs' | 'applications'>(
+    location.pathname.includes('ilanlarim') ? 'jobs' : 'profile',
+  );
   const [selectedJobApplications, setSelectedJobApplications] = useState<ApplicationItem[]>([]);
   const [showApplicationsModal, setShowApplicationsModal] = useState(false);
   const [requestingVerification, setRequestingVerification] = useState(false);
   const [verificationMsg, setVerificationMsg] = useState('');
   const [jobActionMsg, setJobActionMsg] = useState('');
+
+  useEffect(() => {
+    if (location.pathname.includes('ilanlarim')) setTab('jobs');
+  }, [location.pathname]);
 
   const [form, setForm] = useState({
     full_name: '',
@@ -208,27 +215,27 @@ export default function EmployerProfilePage() {
       setJobActionMsg('Yenilemek için paket hakkınız yok. Önce paket satın alın.');
       return;
     }
-    const credit = await consumeCredit(user.id, credits[0].id);
-    if (!credit) {
-      setJobActionMsg('Hak kullanılamadı.');
-      return;
-    }
-    const expires = new Date(Date.now() + credit.durationDays * 24 * 60 * 60 * 1000).toISOString();
     try {
-      await api(`/api/jobs/${jobId}`, {
-        method: 'PATCH',
-        body: {
-          expires_at: expires,
-          status: 'active',
-          featured: credit.featured,
-        },
+      const updated = await api<{
+        expires_at: string;
+        status: string;
+        featured: boolean;
+      }>(`/api/jobs/${jobId}/renew`, {
+        body: { credit_id: credits[0].id },
       });
       setMyJobs((prev) =>
         prev.map((j) =>
-          j.id === jobId ? { ...j, expires_at: expires, status: 'active', featured: credit.featured } : j
-        )
+          j.id === jobId
+            ? {
+                ...j,
+                expires_at: updated.expires_at,
+                status: updated.status,
+                featured: updated.featured,
+              }
+            : j,
+        ),
       );
-      setJobActionMsg(`İlan ${credit.durationDays} gün uzatıldı.`);
+      setJobActionMsg('İlan paket hakkınızla yenilendi.');
     } catch (err) {
       setJobActionMsg(err instanceof Error ? err.message : 'Yenileme başarısız');
     }

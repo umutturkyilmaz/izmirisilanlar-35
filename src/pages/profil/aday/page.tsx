@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,6 +20,7 @@ interface Application {
 
 export default function CandidateProfilePage() {
   const { user, profile, updateProfile, loading } = useAuth();
+  const location = useLocation();
   const [isEditing, setIsEditing] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
   const [appsLoading, setAppsLoading] = useState(true);
@@ -27,7 +28,13 @@ export default function CandidateProfilePage() {
   const [saveMsg, setSaveMsg] = useState('');
   const [uploadMsg, setUploadMsg] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [tab, setTab] = useState<'profile' | 'applications'>('profile');
+  const [tab, setTab] = useState<'profile' | 'applications'>(
+    location.pathname.includes('basvurularim') ? 'applications' : 'profile',
+  );
+
+  useEffect(() => {
+    if (location.pathname.includes('basvurularim')) setTab('applications');
+  }, [location.pathname]);
 
   const [form, setForm] = useState({
     full_name: '',

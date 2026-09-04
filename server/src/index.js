@@ -48,8 +48,35 @@ async function ensureUploadTable() {
 
 const app = express();
 app.set('trust proxy', 1);
-app.use(cors({ origin: true, credentials: true }));
+const SITE_ORIGINS = (
+  process.env.CORS_ORIGINS ||
+  process.env.PUBLIC_SITE_URL ||
+  'https://izmirisilanlari35.com,http://localhost:5173,http://127.0.0.1:5173'
+)
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin || SITE_ORIGINS.includes(origin) || process.env.NODE_ENV !== 'production') {
+        return cb(null, true);
+      }
+      return cb(null, SITE_ORIGINS.includes(origin));
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json({ limit: '2mb' }));
+
+const ALLOWED_UPLOAD_MIME = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'application/pdf',
+]);
+const ALLOWED_UPLOAD_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf']);
 
 /** Disk + MySQL: Railway redeploy disk siler; DB kalıcıdır */
 app.get('/uploads/:filename', async (req, res) => {
@@ -77,7 +104,29 @@ app.get('/uploads/:filename', async (req, res) => {
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (ALLOWED_UPLOAD_MIME.has(file.mimetype) && ALLOWED_UPLOAD_EXT.has(ext)) {
+      return cb(null, true);
+    }
+    cb(new Error('Yalnızca JPG, PNG, WebP, GIF veya PDF yüklenebilir'));
+  },
 });
+
+const contactHits = new Map();
+function contactRateLimit(ip) {
+  const now = Date.now();
+  const key = ip || 'unknown';
+  const row = contactHits.get(key) || { count: 0, start: now };
+  if (now - row.start > 60 * 60 * 1000) {
+    contactHits.set(key, { count: 1, start: now });
+    return true;
+  }
+  if (row.count >= 8) return false;
+  row.count += 1;
+  contactHits.set(key, row);
+  return true;
+}
 
 function uid() {
   return crypto.randomUUID();
@@ -247,33 +296,40 @@ app.patch('/api/auth/profile', auth, async (req, res) => {
   }
 });
 
-app.post('/api/auth/forgot-password', async (req, res) => {
-  // Test aşaması: e-posta gönderimi yok; güvenlik için hep aynı cevap
-  res.json({ ok: true, message: 'Talimatlar e-posta adresinize gönderildi (test: e-posta servisi sonra).' });
+app.post('/api/auth/forgot-password', async (_req, res) => {
+  // E-posta servisi henüz yok; kullanıcıya bilgi sızdırmamak için sabit cevap
+  res.json({
+    ok: true,
+    message:
+      'Bu e-posta kayıtlıysa sıfırlama talimatları gönderilir. E-posta servisi yakında aktif olacak; şimdilik destek ile iletişime geçin.',
+  });
 });
 
 // ---- Upload ----
-app.post('/api/upload', auth, upload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Dosya yok' });
-  const ext = path.extname(req.file.originalname || '').slice(0, 12).toLowerCase();
-  const filename = `${crypto.randomUUID()}${ext}`;
-  const mime = req.file.mimetype || 'application/octet-stream';
-  try {
-    await pool.query('INSERT INTO uploaded_files (id, mime, data) VALUES (?, ?, ?)', [
-      filename,
-      mime,
-      req.file.buffer,
-    ]);
-  } catch (e) {
-    console.error('upload save', e.message);
-    return res.status(500).json({ error: 'Dosya kaydedilemedi' });
-  }
-  try {
-    fs.writeFileSync(path.join(UPLOAD_DIR, filename), req.file.buffer);
-  } catch {
-    /* disk opsiyonel */
-  }
-  res.json({ url: publicUrl(req, filename), filename });
+app.post('/api/upload', auth, (req, res) => {
+  upload.single('file')(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Yükleme hatası' });
+    if (!req.file) return res.status(400).json({ error: 'Dosya yok' });
+    const ext = path.extname(req.file.originalname || '').slice(0, 12).toLowerCase();
+    const filename = `${crypto.randomUUID()}${ext}`;
+    const mime = req.file.mimetype || 'application/octet-stream';
+    try {
+      await pool.query('INSERT INTO uploaded_files (id, mime, data) VALUES (?, ?, ?)', [
+        filename,
+        mime,
+        req.file.buffer,
+      ]);
+    } catch (e) {
+      console.error('upload save', e.message);
+      return res.status(500).json({ error: 'Dosya kaydedilemedi' });
+    }
+    try {
+      fs.writeFileSync(path.join(UPLOAD_DIR, filename), req.file.buffer);
+    } catch {
+      /* disk opsiyonel */
+    }
+    res.json({ url: publicUrl(req, filename), filename });
+  });
 });
 
 // ---- Categories ----
@@ -298,18 +354,24 @@ app.get('/api/jobs', optionalAuth, async (req, res) => {
     const isAdmin = req.user?.role === 'admin';
     const uid = req.user?.id;
 
-    if (status) {
+    if (employer_id) {
+      const canSeeAll = isAdmin || (uid && String(employer_id) === String(uid));
+      where.push('employer_id = :employer_id');
+      params.employer_id = employer_id;
+      if (!canSeeAll) {
+        where.push(`status = 'active'`);
+      } else if (status) {
+        where.push('status = :status');
+        params.status = status;
+      }
+    } else if (status) {
       where.push('status = :status');
       params.status = status;
-    } else if (!isAdmin && !employer_id) {
+    } else if (!isAdmin) {
       where.push(`(status = 'active' OR employer_id = :viewer)`);
       params.viewer = uid || '__none__';
     }
     if (featured === '1' || featured === 'true') where.push('featured = 1');
-    if (employer_id) {
-      where.push('employer_id = :employer_id');
-      params.employer_id = employer_id;
-    }
     if (city) {
       where.push('city LIKE :city');
       params.city = `%${city}%`;
@@ -467,15 +529,13 @@ app.patch('/api/jobs/:id', auth, async (req, res) => {
   if (job.employer_id !== req.user.id && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Yetki yok' });
   }
-  const allowed = [
+  const isAdmin = req.user.role === 'admin';
+  const employerAllowed = [
     'title',
     'description',
     'city',
     'salary_min',
     'salary_max',
-    'status',
-    'featured',
-    'expires_at',
     'sector',
     'job_type',
     'experience_level',
@@ -485,6 +545,8 @@ app.patch('/api/jobs/:id', auth, async (req, res) => {
     'benefits',
     'category_id',
   ];
+  const adminOnly = ['status', 'featured', 'expires_at'];
+  const allowed = isAdmin ? [...employerAllowed, ...adminOnly] : employerAllowed;
   const sets = [];
   const params = { id: req.params.id };
   for (const key of allowed) {
@@ -494,13 +556,76 @@ app.patch('/api/jobs/:id', auth, async (req, res) => {
       if (key === 'requirements' || key === 'benefits') v = JSON.stringify(v);
       if (key === 'featured') v = v ? 1 : 0;
       if (key === 'expires_at' && v) v = new Date(v);
+      if (key === 'status') {
+        const ok = ['pending', 'active', 'rejected', 'closed', 'expired'];
+        if (!ok.includes(v)) return res.status(400).json({ error: 'Geçersiz durum' });
+      }
+      if (key === 'category_id') {
+        const n = Number(v);
+        v = Number.isFinite(n) && n > 0 ? n : null;
+      }
       params[key] = v;
     }
+  }
+  // İşveren kendi ilanını kapatabilir
+  if (!isAdmin && req.body.status === 'closed') {
+    sets.push('status = :status');
+    params.status = 'closed';
   }
   if (!sets.length) return res.status(400).json({ error: 'Boş güncelleme' });
   await pool.query(`UPDATE jobs SET ${sets.join(', ')} WHERE id = :id`, params);
   const [next] = await pool.query('SELECT * FROM jobs WHERE id = :id', { id: req.params.id });
   res.json(parseJob(next[0]));
+});
+
+/** Paket hakkı ile ilan yenileme (atomik) */
+app.post('/api/jobs/:id/renew', auth, async (req, res) => {
+  if (!['employer', 'admin'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Yetki yok' });
+  }
+  const creditId = req.body?.credit_id;
+  if (!creditId) return res.status(400).json({ error: 'Paket hakkı gerekli' });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [jobs] = await conn.query('SELECT * FROM jobs WHERE id = :id LIMIT 1 FOR UPDATE', {
+      id: req.params.id,
+    });
+    const job = jobs[0];
+    if (!job) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'İlan yok' });
+    }
+    if (job.employer_id !== req.user.id && req.user.role !== 'admin') {
+      await conn.rollback();
+      return res.status(403).json({ error: 'Yetki yok' });
+    }
+    const [credits] = await conn.query(
+      `SELECT * FROM employer_credits WHERE id = :id AND employer_id = :uid AND remaining > 0 LIMIT 1 FOR UPDATE`,
+      { id: creditId, uid: req.user.id },
+    );
+    const credit = credits[0];
+    if (!credit) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Geçerli paket hakkı bulunamadı' });
+    }
+    await conn.query(`UPDATE employer_credits SET remaining = remaining - 1 WHERE id = :id`, {
+      id: credit.id,
+    });
+    const expires = new Date(Date.now() + (credit.duration_days || 7) * 24 * 60 * 60 * 1000);
+    await conn.query(
+      `UPDATE jobs SET status = 'active', featured = :featured, expires_at = :exp WHERE id = :id`,
+      { featured: credit.featured ? 1 : 0, exp: expires, id: job.id },
+    );
+    await conn.commit();
+    const [next] = await pool.query('SELECT * FROM jobs WHERE id = :id', { id: job.id });
+    res.json(parseJob(next[0]));
+  } catch (e) {
+    await conn.rollback();
+    res.status(500).json({ error: e.message || 'Yenileme başarısız' });
+  } finally {
+    conn.release();
+  }
 });
 
 function parseJob(row) {
@@ -566,8 +691,17 @@ app.post('/api/applications', auth, async (req, res) => {
     return res.status(403).json({ error: 'Yalnızca adaylar başvurabilir' });
   }
   try {
-    const id = uid();
     const { job_id, cover_letter, cv_url } = req.body || {};
+    if (!job_id) return res.status(400).json({ error: 'İlan gerekli' });
+    const [jobs] = await pool.query('SELECT * FROM jobs WHERE id = :id LIMIT 1', { id: job_id });
+    const job = jobs[0];
+    if (!job || job.status !== 'active') {
+      return res.status(400).json({ error: 'Bu ilana başvuru yapılamaz' });
+    }
+    if (job.expires_at && new Date(job.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'İlan süresi dolmuş' });
+    }
+    const id = uid();
     await pool.query(
       `INSERT INTO applications (id, job_id, candidate_id, cover_letter, cv_url, status)
        VALUES (:id, :job_id, :candidate_id, :cover_letter, :cv_url, 'pending')`,
@@ -579,6 +713,20 @@ app.post('/api/applications', auth, async (req, res) => {
         cv_url: cv_url || null,
       },
     );
+    if (job.employer_id) {
+      const notifId = uid();
+      await pool.query(
+        `INSERT INTO notifications (id, user_id, title, body, link, \`read\`)
+         VALUES (:id, :user_id, :title, :body, :link, 0)`,
+        {
+          id: notifId,
+          user_id: job.employer_id,
+          title: 'Yeni başvuru',
+          body: `"${job.title}" ilanına yeni başvuru geldi.`,
+          link: '/profil/isveren',
+        },
+      );
+    }
     res.status(201).json({ id });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Zaten başvurdunuz' });
@@ -600,7 +748,7 @@ app.get('/api/applications/mine', auth, async (req, res) => {
 
 app.get('/api/applications/employer', auth, async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT a.*, j.title AS job_title, u.full_name AS candidate_name, u.email AS candidate_email
+    `SELECT a.*, j.title AS job_title, u.full_name AS candidate_name, u.email AS candidate_email, u.phone AS candidate_phone
      FROM applications a
      INNER JOIN jobs j ON j.id = a.job_id
      LEFT JOIN users u ON u.id = a.candidate_id
@@ -621,9 +769,14 @@ app.patch('/api/applications/:id', auth, async (req, res) => {
   if (row.employer_id !== req.user.id && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Yetki yok' });
   }
+  const status = req.body?.status;
+  const allowed = ['pending', 'reviewed', 'accepted', 'rejected'];
+  if (!allowed.includes(status)) {
+    return res.status(400).json({ error: 'Geçersiz başvuru durumu' });
+  }
   await pool.query(`UPDATE applications SET status = :status WHERE id = :id`, {
     id: req.params.id,
-    status: req.body.status,
+    status,
   });
   res.json({ ok: true });
 });
@@ -631,9 +784,11 @@ app.patch('/api/applications/:id', auth, async (req, res) => {
 // ---- Favorites ----
 app.get('/api/favorites', auth, async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT f.id, f.job_id, f.created_at, j.title, j.company_name, j.city, j.sector, j.job_type, j.salary_min, j.salary_max
-     FROM favorites f LEFT JOIN jobs j ON j.id = f.job_id
-     WHERE f.user_id = :id ORDER BY f.created_at DESC`,
+    `SELECT f.id, f.job_id, f.created_at, j.title, j.company_name, j.city, j.sector, j.job_type, j.salary_min, j.salary_max, j.status AS job_status
+     FROM favorites f
+     INNER JOIN jobs j ON j.id = f.job_id
+     WHERE f.user_id = :id AND j.status = 'active'
+     ORDER BY f.created_at DESC`,
     { id: req.user.id },
   );
   res.json(rows);
@@ -912,8 +1067,12 @@ app.get('/api/notifications', auth, async (req, res) => {
 });
 
 app.post('/api/notifications', auth, async (req, res) => {
-  const targetUserId =
-    req.user.role === 'admin' && req.body.user_id ? req.body.user_id : req.user.id;
+  // Non-admin yalnızca kendine bildirim oluşturabilir (spam/yanlış hedef engeli)
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Bildirim oluşturma yetkisi yok' });
+  }
+  const targetUserId = req.body.user_id;
+  if (!targetUserId) return res.status(400).json({ error: 'user_id gerekli' });
   const id = uid();
   await pool.query(
     `INSERT INTO notifications (id, user_id, title, body, link, \`read\`) VALUES (:id, :user_id, :title, :body, :link, 0)`,
@@ -937,6 +1096,10 @@ app.patch('/api/notifications/:id/read', auth, async (req, res) => {
 });
 
 app.post('/api/contact', async (req, res) => {
+  const ip = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip;
+  if (!contactRateLimit(ip)) {
+    return res.status(429).json({ error: 'Çok fazla istek. Lütfen sonra tekrar deneyin.' });
+  }
   const id = uid();
   const { name, email, subject, message } = req.body || {};
   if (!name || !email || !message) return res.status(400).json({ error: 'Eksik alan' });
@@ -944,7 +1107,15 @@ app.post('/api/contact', async (req, res) => {
     `INSERT INTO contact_messages (id, name, email, subject, message) VALUES (:id, :name, :email, :subject, :message)`,
     { id, name, email, subject: subject || null, message },
   );
-  res.status(201).json({ ok: true });
+  res.status(201).json({ ok: true, message: 'Mesajınız kaydedildi. En kısa sürede dönüş yapılacak.' });
+});
+
+app.get('/api/admin/contact', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const [rows] = await pool.query(
+    `SELECT id, name, email, subject, message, created_at FROM contact_messages ORDER BY created_at DESC LIMIT 200`,
+  );
+  res.json(rows);
 });
 
 // ---- Admin ----
@@ -961,10 +1132,17 @@ app.patch('/api/admin/users/:id', auth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
   const { dogrulama_durumu, role } = req.body || {};
   if (dogrulama_durumu) {
-    await pool.query(
-      `UPDATE users SET dogrulama_durumu = :d, dogrulanma_tarihi = NOW() WHERE id = :id`,
-      { d: dogrulama_durumu, id: req.params.id },
-    );
+    if (dogrulama_durumu === 'verified') {
+      await pool.query(
+        `UPDATE users SET dogrulama_durumu = :d, dogrulanma_tarihi = NOW() WHERE id = :id`,
+        { d: dogrulama_durumu, id: req.params.id },
+      );
+    } else {
+      await pool.query(`UPDATE users SET dogrulama_durumu = :d WHERE id = :id`, {
+        d: dogrulama_durumu,
+        id: req.params.id,
+      });
+    }
   }
   if (role) {
     await pool.query(`UPDATE users SET role = :role WHERE id = :id`, { role, id: req.params.id });

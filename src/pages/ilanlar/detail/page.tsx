@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import JobImage from '@/components/feature/JobImage';
 import { ASSETS } from '@/lib/assets';
-import { createNotification } from '@/lib/notifications';
+import { EXPERIENCE_LABELS, formatSalary } from '@/lib/jobLabels';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 interface Job {
@@ -59,6 +59,7 @@ export default function JobDetailPage() {
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteId, setFavoriteId] = useState<string | null>(null);
   const [togglingFav, setTogglingFav] = useState(false);
+  const [favMsg, setFavMsg] = useState('');
 
   // Similar jobs state
   const [similarJobs, setSimilarJobs] = useState<SimilarJob[]>([]);
@@ -69,7 +70,7 @@ export default function JobDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await api<Job>(`/api/jobs/${id}`, { auth: false });
+        const data = await api<Job>(`/api/jobs/${id}`);
         setJob(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'İlan yüklenemedi');
@@ -156,15 +157,6 @@ export default function JobDetailPage() {
         },
       });
 
-      if (job?.employer_id) {
-        await createNotification({
-          userId: job.employer_id,
-          title: 'Yeni başvuru',
-          body: `"${job.title}" ilanına yeni başvuru geldi.`,
-          link: '/profil/isveren',
-        });
-      }
-
       setApplyMsg('Başvurunuz başarıyla alındı!');
       setAlreadyApplied(true);
       setTimeout(() => setShowApplyModal(false), 1500);
@@ -189,8 +181,9 @@ export default function JobDetailPage() {
         setIsFavorited(true);
         setFavoriteId(data.id);
       }
-    } catch {
-      // silent
+    } catch (err) {
+      setFavMsg(err instanceof Error ? err.message : 'Favori işlemi başarısız');
+      setTimeout(() => setFavMsg(''), 3000);
     } finally {
       setTogglingFav(false);
     }
@@ -239,6 +232,11 @@ export default function JobDetailPage() {
       <Navbar />
       <main className="flex-1 pt-20 md:pt-24 pb-12">
         <div className="px-4 md:px-6 lg:px-8 max-w-4xl mx-auto">
+          {favMsg && (
+            <div className="mb-3 px-3 py-2 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200">
+              {favMsg}
+            </div>
+          )}
           <div className="flex items-center gap-2 text-sm text-foreground-500 mb-4">
             <Link to="/" className="hover:text-primary-600 transition-colors">Ana Sayfa</Link>
             <i className="ri-arrow-right-s-line" />
@@ -283,11 +281,11 @@ export default function JobDetailPage() {
                 </span>
                 <span className="flex items-center gap-1.5">
                   <i className="ri-briefcase-line text-primary-500" />
-                  {job.experience_level}
+                  {EXPERIENCE_LABELS[job.experience_level] || job.experience_level || 'Belirtilmedi'}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <i className="ri-coins-line text-primary-500" />
-                  {job.salary_min?.toLocaleString('tr-TR')} - {job.salary_max?.toLocaleString('tr-TR')} TL
+                  {formatSalary(job.salary_min, job.salary_max)}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <i className="ri-time-line text-primary-500" />

@@ -53,6 +53,7 @@ export default function NotificationBell() {
                 to={n.link || '#'}
                 onClick={() => {
                   void markNotificationRead(n.id);
+                  setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
                   setOpen(false);
                 }}
                 className={`block px-3 py-2.5 border-b border-background-100 hover:bg-background-100 ${

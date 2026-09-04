@@ -7,9 +7,12 @@ interface ApplicationFull {
   candidate_id: string;
   status: string;
   cover_letter: string | null;
+  cv_url: string | null;
   created_at: string;
   job_title: string;
   candidate_name: string;
+  candidate_email: string | null;
+  candidate_phone: string | null;
 }
 
 interface ApplicationsSectionProps {
@@ -319,6 +322,28 @@ export default function ApplicationsSection({ employerId }: ApplicationsSectionP
                     <p className="text-xs text-foreground-500 mb-1.5">
                       <i className="ri-briefcase-line mr-1" />{app.job_title}
                     </p>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground-500 mb-1.5">
+                      {app.candidate_email && (
+                        <a href={`mailto:${app.candidate_email}`} className="text-primary-600 hover:underline">
+                          <i className="ri-mail-line mr-1" />{app.candidate_email}
+                        </a>
+                      )}
+                      {app.candidate_phone && (
+                        <a href={`tel:${app.candidate_phone}`} className="hover:underline">
+                          <i className="ri-phone-line mr-1" />{app.candidate_phone}
+                        </a>
+                      )}
+                      {app.cv_url && (
+                        <a
+                          href={app.cv_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary-600 hover:underline font-medium"
+                        >
+                          <i className="ri-file-download-line mr-1" />CV indir
+                        </a>
+                      )}
+                    </div>
                     {app.cover_letter && (
                       <p className="text-xs text-foreground-600 bg-background-100 dark:bg-background-50 rounded-lg p-2 mb-2 line-clamp-2">
                         {app.cover_letter}

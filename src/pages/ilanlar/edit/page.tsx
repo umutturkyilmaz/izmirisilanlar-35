@@ -6,22 +6,7 @@ import JobImage from '@/components/feature/JobImage';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { uploadUserFile } from '@/lib/storage';
-
-const JOB_TYPES = [
-  { value: 'tam-zamanli', label: 'Tam Zamanlı' },
-  { value: 'yari-zamanli', label: 'Yarı Zamanlı' },
-  { value: 'staj', label: 'Staj' },
-  { value: 'freelance', label: 'Freelance' },
-  { value: 'uzaktan', label: 'Uzaktan' },
-];
-
-const EXPERIENCE = [
-  { value: 'her-seviye', label: 'Her seviye' },
-  { value: 'yeni-mezun', label: 'Yeni mezun' },
-  { value: '1-3', label: '1-3 yıl' },
-  { value: '3-5', label: '3-5 yıl' },
-  { value: '5-plus', label: '5+ yıl' },
-];
+import { EXPERIENCE_OPTIONS, JOB_TYPE_OPTIONS } from '@/lib/jobLabels';
 
 const STATUSES = [
   { value: 'active', label: 'Yayında' },
@@ -30,6 +15,8 @@ const STATUSES = [
   { value: 'closed', label: 'Kapalı' },
   { value: 'expired', label: 'Süresi doldu' },
 ];
+
+type Category = { id: number; name: string };
 
 type JobEdit = {
   id: string;
@@ -46,6 +33,9 @@ type JobEdit = {
   featured: boolean;
   employer_id: string;
   image_url: string | null;
+  category_id: number | null;
+  requirements: string[] | null;
+  benefits: string[] | null;
 };
 
 export default function EditJobPage() {
@@ -56,6 +46,7 @@ export default function EditJobPage() {
   const isAdmin = profile?.role === 'admin';
   const fromAdmin = searchParams.get('from') === 'admin' || isAdmin;
 
+  const [categories, setCategories] = useState<Category[]>([]);
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -68,13 +59,22 @@ export default function EditJobPage() {
     salary_max: '',
     status: 'active',
     featured: false,
+    category_id: 0,
   });
+  const [requirements, setRequirements] = useState<string[]>(['']);
+  const [benefits, setBenefits] = useState<string[]>(['']);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<Category[]>('/api/categories', { auth: false })
+      .then((rows) => setCategories(rows || []))
+      .catch(() => setCategories([]));
+  }, []);
 
   useEffect(() => {
     if (!id || !user || loading) return;
@@ -97,7 +97,16 @@ export default function EditJobPage() {
           salary_max: data.salary_max != null ? String(data.salary_max) : '',
           status: data.status || 'active',
           featured: !!data.featured,
+          category_id: data.category_id || 0,
         });
+        setRequirements(
+          Array.isArray(data.requirements) && data.requirements.length
+            ? data.requirements
+            : [''],
+        );
+        setBenefits(
+          Array.isArray(data.benefits) && data.benefits.length ? data.benefits : [''],
+        );
         setImageUrl(data.image_url || null);
       } catch {
         setLoadErr('İlan bulunamadı.');
@@ -136,17 +145,22 @@ export default function EditJobPage() {
         if (uploaded.error) throw new Error(uploaded.error);
         nextImage = uploaded.url;
       }
+      const catId = Number(form.category_id);
+      const selected = categories.find((c) => c.id === catId);
       const body: Record<string, unknown> = {
         title: form.title.trim(),
         description: form.description.trim(),
         city: form.city.trim() || null,
         company_name: form.company_name.trim() || null,
-        sector: form.sector.trim() || null,
+        sector: selected?.name || form.sector.trim() || null,
         job_type: form.job_type || null,
         experience_level: form.experience_level || null,
         salary_min: form.salary_min ? parseInt(form.salary_min, 10) : null,
         salary_max: form.salary_max ? parseInt(form.salary_max, 10) : null,
         image_url: nextImage,
+        category_id: Number.isFinite(catId) && catId > 0 ? catId : null,
+        requirements: requirements.map((r) => r.trim()).filter(Boolean),
+        benefits: benefits.map((b) => b.trim()).filter(Boolean),
       };
       if (isAdmin) {
         body.status = form.status;
@@ -172,6 +186,7 @@ export default function EditJobPage() {
 
   const backHref = fromAdmin ? '/admin' : '/profil/isveren';
   const backLabel = fromAdmin ? '← Admin paneline dön' : '← İlanlarıma dön';
+  const inputCls = 'w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm';
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -210,7 +225,7 @@ export default function EditJobPage() {
               <div>
                 <label className="block text-sm font-medium mb-1.5">Başlık</label>
                 <input
-                  className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                  className={inputCls}
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                 />
@@ -218,16 +233,35 @@ export default function EditJobPage() {
               <div>
                 <label className="block text-sm font-medium mb-1.5">Şirket</label>
                 <input
-                  className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                  className={inputCls}
                   value={form.company_name}
                   onChange={(e) => setForm({ ...form, company_name: e.target.value })}
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Kategori</label>
+                <select
+                  className={inputCls}
+                  value={form.category_id || ''}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      category_id: Number(e.target.value) || 0,
+                      sector: categories.find((c) => c.id === Number(e.target.value))?.name || form.sector,
+                    })
+                  }
+                >
+                  <option value="">Seçin</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Şehir</label>
                   <input
-                    className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                    className={inputCls}
                     value={form.city}
                     onChange={(e) => setForm({ ...form, city: e.target.value })}
                   />
@@ -235,7 +269,7 @@ export default function EditJobPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Sektör</label>
                   <input
-                    className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                    className={inputCls}
                     value={form.sector}
                     onChange={(e) => setForm({ ...form, sector: e.target.value })}
                   />
@@ -245,11 +279,11 @@ export default function EditJobPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Çalışma tipi</label>
                   <select
-                    className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                    className={inputCls}
                     value={form.job_type}
                     onChange={(e) => setForm({ ...form, job_type: e.target.value })}
                   >
-                    {JOB_TYPES.map((t) => (
+                    {JOB_TYPE_OPTIONS.map((t) => (
                       <option key={t.value} value={t.value}>{t.label}</option>
                     ))}
                   </select>
@@ -257,11 +291,11 @@ export default function EditJobPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Deneyim</label>
                   <select
-                    className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                    className={inputCls}
                     value={form.experience_level}
                     onChange={(e) => setForm({ ...form, experience_level: e.target.value })}
                   >
-                    {EXPERIENCE.map((t) => (
+                    {EXPERIENCE_OPTIONS.map((t) => (
                       <option key={t.value} value={t.value}>{t.label}</option>
                     ))}
                   </select>
@@ -271,7 +305,7 @@ export default function EditJobPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Min maaş</label>
                   <input
-                    className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                    className={inputCls}
                     value={form.salary_min}
                     onChange={(e) => setForm({ ...form, salary_min: e.target.value })}
                   />
@@ -279,7 +313,7 @@ export default function EditJobPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Max maaş</label>
                   <input
-                    className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                    className={inputCls}
                     value={form.salary_max}
                     onChange={(e) => setForm({ ...form, salary_max: e.target.value })}
                   />
@@ -290,7 +324,7 @@ export default function EditJobPage() {
                   <div>
                     <label className="block text-sm font-medium mb-1.5">Durum</label>
                     <select
-                      className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                      className={inputCls}
                       value={form.status}
                       onChange={(e) => setForm({ ...form, status: e.target.value })}
                     >
@@ -315,10 +349,74 @@ export default function EditJobPage() {
                 <label className="block text-sm font-medium mb-1.5">Açıklama</label>
                 <textarea
                   rows={8}
-                  className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                  className={inputCls}
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                 />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-sm font-medium">Gereksinimler</label>
+                  <button
+                    type="button"
+                    className="text-xs text-primary-600"
+                    onClick={() => setRequirements((p) => [...p, ''])}
+                  >
+                    + Ekle
+                  </button>
+                </div>
+                {requirements.map((r, i) => (
+                  <div key={i} className="flex gap-2 mb-2">
+                    <input
+                      className={inputCls}
+                      value={r}
+                      onChange={(e) =>
+                        setRequirements((prev) => prev.map((x, idx) => (idx === i ? e.target.value : x)))
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="text-foreground-400 px-2"
+                      onClick={() =>
+                        setRequirements((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i)))
+                      }
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-sm font-medium">Yan haklar</label>
+                  <button
+                    type="button"
+                    className="text-xs text-primary-600"
+                    onClick={() => setBenefits((p) => [...p, ''])}
+                  >
+                    + Ekle
+                  </button>
+                </div>
+                {benefits.map((b, i) => (
+                  <div key={i} className="flex gap-2 mb-2">
+                    <input
+                      className={inputCls}
+                      value={b}
+                      onChange={(e) =>
+                        setBenefits((prev) => prev.map((x, idx) => (idx === i ? e.target.value : x)))
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="text-foreground-400 px-2"
+                      onClick={() =>
+                        setBenefits((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i)))
+                      }
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
               </div>
               {msg && <p className="text-sm text-foreground-700">{msg}</p>}
               <button

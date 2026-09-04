@@ -40,7 +40,8 @@ export default function ForgotPasswordPage() {
         <div className="w-full max-w-md bg-background-50 dark:bg-background-100 rounded-2xl border border-background-200 p-6 md:p-8">
           <h1 className="font-heading font-bold text-xl text-foreground-950 mb-2">Şifremi Unuttum</h1>
           <p className="text-sm text-foreground-600 mb-6">
-            Kayıtlı e-posta adresinizi yazın; sıfırlama bağlantısı gönderelim.
+            Kayıtlı e-posta adresinizi yazın. E-posta servisi aktif olduğunda sıfırlama bağlantısı gönderilecek; şimdilik
+            sorun yaşarsanız iletişim formundan yazın.
           </p>
           {msg && (
             <div

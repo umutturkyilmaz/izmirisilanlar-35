@@ -3,7 +3,6 @@ import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { api } from '@/lib/api';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { enqueueEmail } from '@/lib/emailQueue';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -53,18 +52,17 @@ export default function ContactPage() {
         auth: false,
       });
 
-      void enqueueEmail({
-        to: formData.email.trim(),
-        subject: `İletişim alındı: ${formData.subject.trim()}`,
-        body: `Merhaba ${formData.name.trim()},\n\nMesajınızı aldık. En kısa sürede dönüş yapacağız.\n\n— İzmir İş İlanları 35`,
-        kind: 'contact_ack',
-        meta: { source: 'contact_form' },
+      setStatus({
+        type: 'success',
+        text: 'Mesajınız kaydedildi. En kısa sürede size dönüş yapacağız.',
       });
-      setStatus({ type: 'success', text: 'Mesajınız başarıyla gönderildi! En kısa sürede size dönüş yapacağız.' });
       setFormData({ name: '', email: '', subject: '', message: '', phone_alt: '' });
 
-    } catch {
-      setStatus({ type: 'error', text: 'Bağlantı hatası. Lütfen daha sonra tekrar deneyin.' });
+    } catch (err) {
+      setStatus({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Bağlantı hatası. Lütfen daha sonra tekrar deneyin.',
+      });
     } finally {
       setSubmitting(false);
     }

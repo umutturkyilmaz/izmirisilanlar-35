@@ -21,6 +21,7 @@ const JOB_TYPES = [
   { value: 'yari-zamanli', label: 'Yarı Zamanlı' },
   { value: 'staj', label: 'Staj' },
   { value: 'uzaktan', label: 'Uzaktan' },
+  { value: 'freelance', label: 'Freelance' },
 ];
 
 const EXPERIENCE_LEVELS = [

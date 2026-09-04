@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import DashboardSection from '@/pages/admin/components/DashboardSection';
 import PaymentsSection from '@/pages/admin/components/PaymentsSection';
+import ContactMessagesSection from '@/pages/admin/components/ContactMessagesSection';
 
 interface EmployerProfile {
   id: string;
@@ -41,7 +42,7 @@ interface JobWithEmployer {
 
 type EmployerFilterTab = 'all' | 'pending' | 'verified' | 'rejected' | 'unverified';
 type JobFilterTab = 'all' | 'pending' | 'active' | 'rejected';
-type MainTab = 'employers' | 'jobs' | 'payments' | 'stats';
+type MainTab = 'employers' | 'jobs' | 'payments' | 'messages' | 'stats';
 
 export default function AdminPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -237,7 +238,7 @@ export default function AdminPage() {
       filtered = filtered.filter(
         (j) =>
           j.title.toLowerCase().includes(term) ||
-          j.company_name.toLowerCase().includes(term) ||
+          (j.company_name || '').toLowerCase().includes(term) ||
           (j.city && j.city.toLowerCase().includes(term)) ||
           (j.sector && j.sector.toLowerCase().includes(term)),
       );
@@ -416,6 +417,17 @@ export default function AdminPage() {
             >
               <i className="ri-bank-card-line mr-1.5" />
               Ödemeler
+            </button>
+            <button
+              onClick={() => setMainTab('messages')}
+              className={`px-5 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                mainTab === 'messages'
+                  ? 'bg-white dark:bg-background-50 text-foreground-950 shadow-sm'
+                  : 'text-foreground-500 hover:text-foreground-700'
+              }`}
+            >
+              <i className="ri-mail-line mr-1.5" />
+              İletişim
             </button>
             <button
               onClick={() => setMainTab('stats')}
@@ -736,7 +748,13 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* ==================== STATS TAB ==================== */}
+          {mainTab === 'messages' && (
+            <div>
+              <h2 className="font-heading font-semibold text-lg mb-4">İletişim Mesajları</h2>
+              <ContactMessagesSection />
+            </div>
+          )}
+
           {mainTab === 'stats' && (
             <DashboardSection />
           )}
@@ -881,9 +899,9 @@ export default function AdminPage() {
               <div className="text-sm">
                 <p className="text-xs text-foreground-400 mb-1">Açıklama</p>
                 <p className="text-foreground-700 leading-relaxed max-h-32 overflow-y-auto">
-                  {jobDetailModal.description.length > 300
+                  {jobDetailModal.description && jobDetailModal.description.length > 300
                     ? jobDetailModal.description.slice(0, 300) + '...'
-                    : jobDetailModal.description}
+                    : jobDetailModal.description || '—'}
                 </p>
               </div>
 

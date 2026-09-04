@@ -25,27 +25,27 @@ export default function Footer() {
               {t('footer.description')}
             </p>
             <div className="flex items-center gap-3 mt-4">
-              <a
-                href="#"
-                className="w-9 h-9 rounded-full bg-background-200 dark:bg-background-200 flex items-center justify-center text-foreground-600 hover:bg-primary-500 hover:text-background-50 transition-colors"
-                aria-label="Instagram"
+              <span
+                className="w-9 h-9 rounded-full bg-background-200 dark:bg-background-200 flex items-center justify-center text-foreground-400"
+                aria-label="Instagram (yakında)"
+                title="Yakında"
               >
                 <i className="ri-instagram-line text-lg" />
-              </a>
-              <a
-                href="#"
-                className="w-9 h-9 rounded-full bg-background-200 dark:bg-background-200 flex items-center justify-center text-foreground-600 hover:bg-primary-500 hover:text-background-50 transition-colors"
-                aria-label="Twitter"
+              </span>
+              <span
+                className="w-9 h-9 rounded-full bg-background-200 dark:bg-background-200 flex items-center justify-center text-foreground-400"
+                aria-label="Twitter (yakında)"
+                title="Yakında"
               >
                 <i className="ri-twitter-x-line text-lg" />
-              </a>
-              <a
-                href="#"
-                className="w-9 h-9 rounded-full bg-background-200 dark:bg-background-200 flex items-center justify-center text-foreground-600 hover:bg-primary-500 hover:text-background-50 transition-colors"
-                aria-label="LinkedIn"
+              </span>
+              <span
+                className="w-9 h-9 rounded-full bg-background-200 dark:bg-background-200 flex items-center justify-center text-foreground-400"
+                aria-label="LinkedIn (yakında)"
+                title="Yakında"
               >
                 <i className="ri-linkedin-line text-lg" />
-              </a>
+              </span>
             </div>
           </div>
 
