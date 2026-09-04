@@ -696,6 +696,13 @@ export default function AdminPage() {
                             </td>
                             <td className="px-4 py-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">
+                                <Link
+                                  to={`/ilan/${job.id}/duzenle?from=admin`}
+                                  className="w-8 h-8 rounded-lg flex items-center justify-center text-primary-600 hover:text-primary-700 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+                                  title="Düzenle"
+                                >
+                                  <i className="ri-pencil-line text-sm" />
+                                </Link>
                                 <button onClick={() => setJobDetailModal(job)} className="w-8 h-8 rounded-lg flex items-center justify-center text-foreground-400 hover:text-foreground-600 hover:bg-background-100 dark:hover:bg-background-200 transition-colors" title="Detay">
                                   <i className="ri-eye-line text-sm" />
                                 </button>
@@ -880,24 +887,30 @@ export default function AdminPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 pt-3 border-t border-background-100 dark:border-background-200">
+              <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-background-100 dark:border-background-200">
+                <Link
+                  to={`/ilan/${jobDetailModal.id}/duzenle?from=admin`}
+                  className="flex-1 min-w-[140px] px-4 py-2.5 text-sm font-medium text-center bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors whitespace-nowrap"
+                >
+                  <i className="ri-pencil-line mr-1.5" />Düzenle
+                </Link>
                 {jobDetailModal.status === 'pending' && (
                   <>
-                    <button onClick={() => { handleApproveJob(jobDetailModal.id); setJobDetailModal(null); }} className="flex-1 px-4 py-2.5 text-sm font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors whitespace-nowrap">
+                    <button onClick={() => { handleApproveJob(jobDetailModal.id); setJobDetailModal(null); }} className="flex-1 min-w-[140px] px-4 py-2.5 text-sm font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors whitespace-nowrap">
                       <i className="ri-check-line mr-1.5" />Onayla ve Yayınla
                     </button>
-                    <button onClick={() => { handleRejectJob(jobDetailModal.id); setJobDetailModal(null); }} className="flex-1 px-4 py-2.5 text-sm font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors whitespace-nowrap">
+                    <button onClick={() => { handleRejectJob(jobDetailModal.id); setJobDetailModal(null); }} className="flex-1 min-w-[140px] px-4 py-2.5 text-sm font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors whitespace-nowrap">
                       <i className="ri-close-line mr-1.5" />Reddet
                     </button>
                   </>
                 )}
                 {jobDetailModal.status === 'active' && (
-                  <button onClick={() => { handleCloseJob(jobDetailModal.id); setJobDetailModal(null); }} className="flex-1 px-4 py-2.5 text-sm font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors whitespace-nowrap">
+                  <button onClick={() => { handleCloseJob(jobDetailModal.id); setJobDetailModal(null); }} className="flex-1 min-w-[140px] px-4 py-2.5 text-sm font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors whitespace-nowrap">
                     <i className="ri-close-line mr-1.5" />İlanı Kapat
                   </button>
                 )}
                 {(jobDetailModal.status === 'rejected' || jobDetailModal.status === 'closed' || jobDetailModal.status === 'expired') && (
-                  <button onClick={() => setJobDetailModal(null)} className="w-full px-4 py-2.5 text-sm font-medium bg-background-100 dark:bg-background-200 text-foreground-700 rounded-lg hover:bg-background-200 dark:hover:bg-background-300 transition-colors whitespace-nowrap">
+                  <button onClick={() => setJobDetailModal(null)} className="flex-1 min-w-[140px] px-4 py-2.5 text-sm font-medium bg-background-100 dark:bg-background-200 text-foreground-700 rounded-lg hover:bg-background-200 dark:hover:bg-background-300 transition-colors whitespace-nowrap">
                     Kapat
                   </button>
                 )}

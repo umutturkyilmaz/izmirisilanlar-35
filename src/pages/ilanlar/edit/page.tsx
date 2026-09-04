@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import JobImage from '@/components/feature/JobImage';
@@ -7,27 +7,67 @@ import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { uploadUserFile } from '@/lib/storage';
 
+const JOB_TYPES = [
+  { value: 'tam-zamanli', label: 'Tam Zamanlı' },
+  { value: 'yari-zamanli', label: 'Yarı Zamanlı' },
+  { value: 'staj', label: 'Staj' },
+  { value: 'freelance', label: 'Freelance' },
+  { value: 'uzaktan', label: 'Uzaktan' },
+];
+
+const EXPERIENCE = [
+  { value: 'her-seviye', label: 'Her seviye' },
+  { value: 'yeni-mezun', label: 'Yeni mezun' },
+  { value: '1-3', label: '1-3 yıl' },
+  { value: '3-5', label: '3-5 yıl' },
+  { value: '5-plus', label: '5+ yıl' },
+];
+
+const STATUSES = [
+  { value: 'active', label: 'Yayında' },
+  { value: 'pending', label: 'Onay bekliyor' },
+  { value: 'rejected', label: 'Reddedildi' },
+  { value: 'closed', label: 'Kapalı' },
+  { value: 'expired', label: 'Süresi doldu' },
+];
+
 type JobEdit = {
   id: string;
   title: string;
   description: string;
   city: string | null;
+  company_name: string | null;
+  sector: string | null;
+  job_type: string | null;
+  experience_level: string | null;
   salary_min: number | null;
   salary_max: number | null;
+  status: string;
+  featured: boolean;
   employer_id: string;
   image_url: string | null;
 };
 
 export default function EditJobPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
+  const isAdmin = profile?.role === 'admin';
+  const fromAdmin = searchParams.get('from') === 'admin' || isAdmin;
+
   const [form, setForm] = useState({
     title: '',
     description: '',
     city: '',
+    company_name: '',
+    sector: '',
+    job_type: 'tam-zamanli',
+    experience_level: 'her-seviye',
     salary_min: '',
     salary_max: '',
+    status: 'active',
+    featured: false,
   });
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -37,7 +77,7 @@ export default function EditJobPage() {
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id || !user) return;
+    if (!id || !user || loading) return;
     (async () => {
       try {
         const data = await api<JobEdit>(`/api/jobs/${id}`);
@@ -49,15 +89,21 @@ export default function EditJobPage() {
           title: data.title || '',
           description: data.description || '',
           city: data.city || '',
+          company_name: data.company_name || '',
+          sector: data.sector || '',
+          job_type: data.job_type || 'tam-zamanli',
+          experience_level: data.experience_level || 'her-seviye',
           salary_min: data.salary_min != null ? String(data.salary_min) : '',
           salary_max: data.salary_max != null ? String(data.salary_max) : '',
+          status: data.status || 'active',
+          featured: !!data.featured,
         });
         setImageUrl(data.image_url || null);
       } catch {
         setLoadErr('İlan bulunamadı.');
       }
     })();
-  }, [id, user, profile]);
+  }, [id, user, profile, loading]);
 
   useEffect(() => {
     if (!imageFile) {
@@ -72,8 +118,13 @@ export default function EditJobPage() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || !user) return;
-    if (form.title.trim().length < 5 || form.description.trim().length < 50) {
-      setMsg('Başlık en az 5, açıklama en az 50 karakter olmalı.');
+    const minDesc = isAdmin ? 1 : 50;
+    if (form.title.trim().length < 3) {
+      setMsg('Başlık en az 3 karakter olmalı.');
+      return;
+    }
+    if (form.description.trim().length < minDesc) {
+      setMsg(isAdmin ? 'Açıklama gerekli.' : 'Açıklama en az 50 karakter olmalı.');
       return;
     }
     setSaving(true);
@@ -85,21 +136,27 @@ export default function EditJobPage() {
         if (uploaded.error) throw new Error(uploaded.error);
         nextImage = uploaded.url;
       }
-      await api(`/api/jobs/${id}`, {
-        method: 'PATCH',
-        body: {
-          title: form.title.trim(),
-          description: form.description.trim(),
-          city: form.city.trim() || null,
-          salary_min: form.salary_min ? parseInt(form.salary_min, 10) : null,
-          salary_max: form.salary_max ? parseInt(form.salary_max, 10) : null,
-          image_url: nextImage,
-        },
-      });
+      const body: Record<string, unknown> = {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        city: form.city.trim() || null,
+        company_name: form.company_name.trim() || null,
+        sector: form.sector.trim() || null,
+        job_type: form.job_type || null,
+        experience_level: form.experience_level || null,
+        salary_min: form.salary_min ? parseInt(form.salary_min, 10) : null,
+        salary_max: form.salary_max ? parseInt(form.salary_max, 10) : null,
+        image_url: nextImage,
+      };
+      if (isAdmin) {
+        body.status = form.status;
+        body.featured = form.featured;
+      }
+      await api(`/api/jobs/${id}`, { method: 'PATCH', body });
       setImageUrl(nextImage);
       setImageFile(null);
       setMsg('İlan güncellendi.');
-      setTimeout(() => navigate(`/ilan/${id}`), 1000);
+      setTimeout(() => navigate(fromAdmin ? '/admin' : `/ilan/${id}`), 800);
     } catch (err) {
       setMsg(err instanceof Error ? err.message : 'Güncelleme başarısız');
     } finally {
@@ -113,13 +170,16 @@ export default function EditJobPage() {
     );
   }
 
+  const backHref = fromAdmin ? '/admin' : '/profil/isveren';
+  const backLabel = fromAdmin ? '← Admin paneline dön' : '← İlanlarıma dön';
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <main className="flex-1 pt-20 md:pt-24 pb-16">
         <div className="max-w-2xl mx-auto px-4">
-          <Link to="/profil/isveren" className="text-sm text-primary-600 hover:underline">
-            ← İlanlarıma dön
+          <Link to={backHref} className="text-sm text-primary-600 hover:underline">
+            {backLabel}
           </Link>
           <h1 className="font-heading text-2xl font-bold mt-3 mb-6">İlanı Düzenle</h1>
           {loadErr ? (
@@ -156,12 +216,56 @@ export default function EditJobPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Şehir</label>
+                <label className="block text-sm font-medium mb-1.5">Şirket</label>
                 <input
                   className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
-                  value={form.city}
-                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  value={form.company_name}
+                  onChange={(e) => setForm({ ...form, company_name: e.target.value })}
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Şehir</label>
+                  <input
+                    className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                    value={form.city}
+                    onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Sektör</label>
+                  <input
+                    className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                    value={form.sector}
+                    onChange={(e) => setForm({ ...form, sector: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Çalışma tipi</label>
+                  <select
+                    className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                    value={form.job_type}
+                    onChange={(e) => setForm({ ...form, job_type: e.target.value })}
+                  >
+                    {JOB_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Deneyim</label>
+                  <select
+                    className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                    value={form.experience_level}
+                    onChange={(e) => setForm({ ...form, experience_level: e.target.value })}
+                  >
+                    {EXPERIENCE.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -181,6 +285,32 @@ export default function EditJobPage() {
                   />
                 </div>
               </div>
+              {isAdmin && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">Durum</label>
+                    <select
+                      className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                      value={form.status}
+                      onChange={(e) => setForm({ ...form, status: e.target.value })}
+                    >
+                      {STATUSES.map((s) => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-end pb-1">
+                    <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.featured}
+                        onChange={(e) => setForm({ ...form, featured: e.target.checked })}
+                      />
+                      Öne çıkan ilan
+                    </label>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium mb-1.5">Açıklama</label>
                 <textarea
