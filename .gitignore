@@ -6,7 +6,9 @@ dist
 .env.*.local
 *.log
 .DS_Store
-.cursor
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 coverage
 *.tsbuildinfo
 .railway

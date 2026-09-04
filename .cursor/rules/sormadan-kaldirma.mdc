@@ -1,0 +1,22 @@
+---
+description: Sormadan silme/kaldırma yasağı — logo, görsel, UI, özellik
+alwaysApply: true
+---
+
+# Sormadan hiçbir şeyi kaldırma
+
+Kullanıcı açıkça “sil / kaldır / çıkar” demeden:
+
+- Dosya silme (`public/assets`, logo, görseller, sayfalar)
+- UI öğesini kaldırma (logo, buton, menü, bölüm)
+- Özellik / route / metin kaldırma
+- “placeholder koy” diye asıl dosyanın yerine geçme
+
+Eksik görünen varlık varsa önce git geçmişinde veya `public/assets` içinde ara. Bulamazsan **sor**; yeşil kutu / SVG ile değiştirme.
+
+```text
+❌ BAD: logo.webp yok sanıp logo.svg placeholder koyup asıl logoyu unutmak
+✅ GOOD: git checkout ile orijinal logo.webp’i geri getir; emin değilsen sor
+```
+
+Düzeltme = mevcut şeyi koru, üzerine ekle veya onar. Kaldırmak ayrı izin ister.
