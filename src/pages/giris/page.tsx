@@ -7,6 +7,7 @@ import GoogleSignInButton from '@/components/feature/GoogleSignInButton';
 import { useAuth } from '@/hooks/useAuth';
 import { ASSETS } from '@/lib/assets';
 import { GOOGLE_CLIENT_ID } from '@/lib/site';
+import { homeForRole } from '@/lib/redirect';
 
 export default function LoginPage() {
   const { t } = useTranslation('common');
@@ -23,7 +24,7 @@ export default function LoginPage() {
       setIsLoading(true);
       const result = await signInWithGoogle(credential);
       setIsLoading(false);
-      if (result.success) navigate('/');
+      if (result.success) navigate(homeForRole(result.profile?.role));
       else setError(result.error || 'Google girişi başarısız');
     },
     [navigate, signInWithGoogle],
@@ -38,7 +39,7 @@ export default function LoginPage() {
     setIsLoading(false);
 
     if (result.success) {
-      navigate('/');
+      navigate(homeForRole(result.profile?.role));
     } else {
       setError(result.error || 'Giriş yapılamadı, lütfen bilgilerinizi kontrol edin.');
     }

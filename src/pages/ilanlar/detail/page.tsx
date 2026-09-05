@@ -140,6 +140,10 @@ export default function JobDetailPage() {
 
   const handleApply = async () => {
     if (!user || !id) return;
+    if (!profile?.cv_url) {
+      setApplyMsg('Başvurudan önce profilinize PDF CV yükleyin.');
+      return;
+    }
     const rl = checkRateLimit(`apply_${user.id}_${id}`, 3, 60 * 60 * 1000);
     if (!rl.ok) {
       setApplyMsg(`Çok fazla başvuru denemesi. ${rl.retryAfterSec} sn bekleyin.`);
@@ -153,7 +157,7 @@ export default function JobDetailPage() {
         body: {
           job_id: id,
           cover_letter: coverLetter || null,
-          cv_url: profile?.cv_url || null,
+          cv_url: profile.cv_url,
         },
       });
 
@@ -500,6 +504,15 @@ export default function JobDetailPage() {
               />
               <p className="text-xs text-foreground-400 mt-1">{coverLetter.length}/500 karakter</p>
             </div>
+
+            {!profile?.cv_url && (
+              <p className="mb-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                PDF CV gerekli.{' '}
+                <Link to="/profil/aday" className="underline font-medium">
+                  Profilinize yükleyin
+                </Link>
+              </p>
+            )}
 
             {applyMsg && (
               <div className={`mb-4 p-3 rounded-lg text-sm ${applyMsg.includes('başarıyla') ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'}`}>

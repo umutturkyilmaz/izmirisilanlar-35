@@ -5,6 +5,7 @@ import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { uploadUserFile } from '@/lib/storage';
+import { openAuthedFile } from '@/lib/files';
 
 interface Application {
   id: string;
@@ -31,10 +32,26 @@ export default function CandidateProfilePage() {
   const [tab, setTab] = useState<'profile' | 'applications'>(
     location.pathname.includes('basvurularim') ? 'applications' : 'profile',
   );
+  const [pwdForm, setPwdForm] = useState({ current: '', next: '' });
+  const [pwdMsg, setPwdMsg] = useState('');
 
   useEffect(() => {
     if (location.pathname.includes('basvurularim')) setTab('applications');
   }, [location.pathname]);
+
+  const handleChangePassword = async () => {
+    setPwdMsg('');
+    try {
+      const data = await api<{ message?: string }>('/api/auth/change-password', {
+        method: 'POST',
+        body: { current_password: pwdForm.current, new_password: pwdForm.next },
+      });
+      setPwdMsg(data.message || 'Şifre güncellendi');
+      setPwdForm({ current: '', next: '' });
+    } catch (err) {
+      setPwdMsg(err instanceof Error ? err.message : 'Şifre güncellenemedi');
+    }
+  };
 
   const [form, setForm] = useState({
     full_name: '',
@@ -257,6 +274,34 @@ export default function CandidateProfilePage() {
                     placeholder="Kendinizden kısaca bahsedin..."
                   />
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-background-200 pt-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Mevcut şifre</label>
+                    <input
+                      type="password"
+                      value={pwdForm.current}
+                      onChange={(e) => setPwdForm({ ...pwdForm, current: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-background-100 border border-background-200 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Yeni şifre</label>
+                    <input
+                      type="password"
+                      value={pwdForm.next}
+                      onChange={(e) => setPwdForm({ ...pwdForm, next: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-background-100 border border-background-200 text-sm"
+                    />
+                  </div>
+                </div>
+                {pwdMsg && <p className="text-sm text-foreground-600">{pwdMsg}</p>}
+                <button
+                  type="button"
+                  onClick={() => void handleChangePassword()}
+                  className="text-sm text-primary-600 hover:underline"
+                >
+                  Şifreyi güncelle
+                </button>
 
                 {saveMsg && (
                   <div className={`p-3 rounded-lg text-sm ${saveMsg.includes('başarıyla') ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'}`}>
@@ -350,16 +395,24 @@ export default function CandidateProfilePage() {
             <div className="bg-background-50 dark:bg-background-100 rounded-xl border border-background-200 p-5 md:p-6">
               <h2 className="font-heading font-semibold text-lg text-foreground-950 mb-3">CV</h2>
               {profile.cv_url ? (
-                <a href={profile.cv_url} target="_blank" rel="noreferrer" className="text-sm text-primary-600 hover:underline inline-flex items-center gap-1 mb-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void openAuthedFile(profile.cv_url!).catch((err) =>
+                      setUploadMsg(err instanceof Error ? err.message : 'CV açılamadı'),
+                    );
+                  }}
+                  className="text-sm text-primary-600 hover:underline inline-flex items-center gap-1 mb-3"
+                >
                   <i className="ri-file-pdf-line" /> Mevcut CV&apos;yi aç
-                </a>
+                </button>
               ) : (
                 <p className="text-sm text-foreground-500 mb-3">Henüz CV yüklenmedi.</p>
               )}
               <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium cursor-pointer hover:bg-primary-700">
                 <i className="ri-upload-2-line" />
-                {uploading ? 'Yükleniyor...' : 'CV Yükle (PDF/DOC)'}
-                <input type="file" accept=".pdf,.doc,.docx,application/pdf" className="hidden" onChange={(e) => handleCv(e.target.files?.[0] || null)} />
+                {uploading ? 'Yükleniyor...' : 'CV Yükle (PDF)'}
+                <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => handleCv(e.target.files?.[0] || null)} />
               </label>
             </div>
             </div>

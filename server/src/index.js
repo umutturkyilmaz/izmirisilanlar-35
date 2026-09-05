@@ -16,6 +16,7 @@ import {
   sendContactAckEmail,
   sendNewApplicationEmail,
   sendEmployerVerifiedEmail,
+  sendApplicationStatusEmail,
 } from './mail.js';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -61,6 +62,8 @@ async function ensureSchema() {
     `ALTER TABLE uploaded_files ADD COLUMN owner_id CHAR(36) NULL`,
     `ALTER TABLE users ADD COLUMN google_id VARCHAR(128) NULL`,
     `ALTER TABLE users ADD UNIQUE INDEX uq_users_google (google_id)`,
+    `ALTER TABLE jobs ADD COLUMN credit_id CHAR(36) NULL`,
+    `ALTER TABLE contact_messages ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 0`,
   ]) {
     try {
       await pool.query(sql);
@@ -311,6 +314,11 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
+    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip;
+    const rl = await checkRateLimitDb(`login:${ip}`, 20, 15 * 60 * 1000);
+    if (!rl.ok) {
+      return res.status(429).json({ error: 'Çok fazla deneme. Bir süre sonra tekrar deneyin.', retryAfterSec: rl.retryAfterSec });
+    }
     const { email, password } = req.body || {};
     const [rows] = await pool.query('SELECT * FROM users WHERE email = :email LIMIT 1', {
       email: String(email || '').trim().toLowerCase(),
@@ -323,6 +331,17 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+app.post('/api/auth/change-password', auth, async (req, res) => {
+  const current = String(req.body?.current_password || '');
+  const next = String(req.body?.new_password || '');
+  if (next.length < 6) return res.status(400).json({ error: 'Yeni şifre en az 6 karakter olmalı' });
+  const ok = await bcrypt.compare(current, req.user.password_hash || '');
+  if (!ok) return res.status(400).json({ error: 'Mevcut şifre hatalı' });
+  const hash = await bcrypt.hash(next, 10);
+  await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, req.user.id]);
+  res.json({ ok: true, message: 'Şifre güncellendi' });
 });
 
 app.get('/api/auth/me', auth, (req, res) => {
@@ -365,8 +384,10 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     .toLowerCase();
   const generic = {
     ok: true,
-    message:
-      'Bu e-posta kayıtlıysa sıfırlama bağlantısı gönderilir. Gelen kutusu ve spam klasörünü kontrol edin.',
+    mailConfigured: isMailReady(),
+    message: isMailReady()
+      ? 'Bu e-posta kayıtlıysa sıfırlama bağlantısı gönderilir. Gelen kutusu ve spam klasörünü kontrol edin.'
+      : 'E-posta servisi henüz yapılandırılmadı. Şimdilik iletişim formundan yazın; SMTP eklenince sıfırlama maili çalışacak.',
   };
   if (!email) return res.json(generic);
   try {
@@ -444,9 +465,20 @@ app.post('/api/auth/google', async (req, res) => {
     if (!user) {
       const id = uid();
       const hash = await bcrypt.hash(crypto.randomUUID(), 10);
+      let companyName = null;
+      let vergi = null;
+      let dogrulama = 'unverified';
+      if (roleWanted === 'employer') {
+        companyName = String(req.body?.company_name || req.body?.companyName || '').trim() || null;
+        vergi = String(req.body?.vergi_numarasi || req.body?.vergiNumarasi || '').replace(/\D/g, '');
+        if (!vergi || vergi.length !== 10) {
+          return res.status(400).json({ error: 'İşveren Google kaydı için 10 haneli vergi numarası gerekli' });
+        }
+        dogrulama = 'pending';
+      }
       await pool.query(
-        `INSERT INTO users (id, email, password_hash, role, full_name, avatar_url, google_id, dogrulama_durumu)
-         VALUES (:id, :email, :hash, :role, :full_name, :avatar, :google_id, 'unverified')`,
+        `INSERT INTO users (id, email, password_hash, role, full_name, avatar_url, google_id, company_name, vergi_numarasi, dogrulama_durumu)
+         VALUES (:id, :email, :hash, :role, :full_name, :avatar, :google_id, :company_name, :vergi, :dogrulama)`,
         {
           id,
           email,
@@ -455,6 +487,9 @@ app.post('/api/auth/google', async (req, res) => {
           full_name: fullName,
           avatar,
           google_id: googleId,
+          company_name: companyName,
+          vergi,
+          dogrulama,
         },
       );
       [rows] = await pool.query('SELECT * FROM users WHERE id = :id', { id });
@@ -671,6 +706,7 @@ app.post('/api/jobs', auth, async (req, res) => {
       expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     }
 
+    let usedCreditId = null;
     if (b.credit_id && !isAdmin) {
       const [creditRows] = await conn.query(
         `SELECT * FROM employer_credits WHERE id = :id AND employer_id = :uid AND remaining > 0 LIMIT 1 FOR UPDATE`,
@@ -686,16 +722,17 @@ app.post('/api/jobs', auth, async (req, res) => {
       });
       featured = !!credit.featured;
       expiresAt = new Date(Date.now() + (credit.duration_days || 7) * 24 * 60 * 60 * 1000);
+      usedCreditId = credit.id;
     }
 
     const id = uid();
     await conn.query(
       `INSERT INTO jobs
       (id, employer_id, title, category_id, sector, description, company_name, city, job_type, experience_level,
-       salary_min, salary_max, requirements, benefits, image_url, status, featured, expires_at)
+       salary_min, salary_max, requirements, benefits, image_url, status, featured, expires_at, credit_id)
       VALUES
       (:id, :employer_id, :title, :category_id, :sector, :description, :company_name, :city, :job_type, :experience_level,
-       :salary_min, :salary_max, :requirements, :benefits, :image_url, :status, :featured, :expires_at)`,
+       :salary_min, :salary_max, :requirements, :benefits, :image_url, :status, :featured, :expires_at, :credit_id)`,
       {
         id,
         employer_id: req.user.id,
@@ -715,6 +752,7 @@ app.post('/api/jobs', auth, async (req, res) => {
         status: isAdmin ? b.status || 'active' : b.status || 'pending',
         featured: featured ? 1 : 0,
         expires_at: expiresAt,
+        credit_id: usedCreditId,
       },
     );
     const [rows] = await conn.query('SELECT * FROM jobs WHERE id = :id', { id });
@@ -780,6 +818,15 @@ app.patch('/api/jobs/:id', auth, async (req, res) => {
     params.status = 'closed';
   }
   if (!sets.length) return res.status(400).json({ error: 'Boş güncelleme' });
+
+  // Reddedilince paket hakkını iade et (bir kez)
+  if (isAdmin && req.body.status === 'rejected' && job.status === 'pending' && job.credit_id) {
+    await pool.query(`UPDATE employer_credits SET remaining = remaining + 1 WHERE id = :id`, {
+      id: job.credit_id,
+    });
+    sets.push('credit_id = NULL');
+  }
+
   await pool.query(`UPDATE jobs SET ${sets.join(', ')} WHERE id = :id`, params);
   const [next] = await pool.query('SELECT * FROM jobs WHERE id = :id', { id: req.params.id });
   res.json(parseJob(next[0]));
@@ -970,7 +1017,11 @@ app.get('/api/applications/employer', auth, async (req, res) => {
 
 app.patch('/api/applications/:id', auth, async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT a.*, j.employer_id FROM applications a INNER JOIN jobs j ON j.id = a.job_id WHERE a.id = :id`,
+    `SELECT a.*, j.employer_id, j.title AS job_title, u.email AS candidate_email
+     FROM applications a
+     INNER JOIN jobs j ON j.id = a.job_id
+     LEFT JOIN users u ON u.id = a.candidate_id
+     WHERE a.id = :id`,
     { id: req.params.id },
   );
   const row = rows[0];
@@ -983,10 +1034,31 @@ app.patch('/api/applications/:id', auth, async (req, res) => {
   if (!allowed.includes(status)) {
     return res.status(400).json({ error: 'Geçersiz başvuru durumu' });
   }
+  const prev = row.status;
   await pool.query(`UPDATE applications SET status = :status WHERE id = :id`, {
     id: req.params.id,
     status,
   });
+  if (prev !== status && row.candidate_id) {
+    const labels = {
+      pending: 'Değerlendiriliyor',
+      reviewed: 'İncelendi',
+      accepted: 'Kabul edildi',
+      rejected: 'Reddedildi',
+    };
+    const notifId = uid();
+    await pool.query(
+      `INSERT INTO notifications (id, user_id, title, body, link, \`read\`) VALUES (?, ?, ?, ?, ?, 0)`,
+      [
+        notifId,
+        row.candidate_id,
+        'Başvuru durumu güncellendi',
+        `"${row.job_title}" → ${labels[status] || status}`,
+        '/basvurularim',
+      ],
+    );
+    void sendApplicationStatusEmail(row.candidate_email, row.job_title, status);
+  }
   res.json({ ok: true });
 });
 
@@ -996,7 +1068,7 @@ app.get('/api/favorites', auth, async (req, res) => {
     `SELECT f.id, f.job_id, f.created_at, j.title, j.company_name, j.city, j.sector, j.job_type, j.salary_min, j.salary_max, j.status AS job_status
      FROM favorites f
      INNER JOIN jobs j ON j.id = f.job_id
-     WHERE f.user_id = :id AND j.status = 'active'
+     WHERE f.user_id = :id
      ORDER BY f.created_at DESC`,
     { id: req.user.id },
   );
@@ -1327,9 +1399,21 @@ app.post('/api/contact', async (req, res) => {
 app.get('/api/admin/contact', auth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
   const [rows] = await pool.query(
-    `SELECT id, name, email, subject, message, created_at FROM contact_messages ORDER BY created_at DESC LIMIT 200`,
+    `SELECT id, name, email, subject, message, is_read, created_at FROM contact_messages ORDER BY created_at DESC LIMIT 200`,
   );
-  res.json(rows);
+  res.json(rows.map((r) => ({ ...r, is_read: !!r.is_read })));
+});
+
+app.patch('/api/admin/contact/:id/read', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  await pool.query('UPDATE contact_messages SET is_read = 1 WHERE id = ?', [req.params.id]);
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/contact/:id', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  await pool.query('DELETE FROM contact_messages WHERE id = ?', [req.params.id]);
+  res.json({ ok: true });
 });
 
 // ---- Admin ----

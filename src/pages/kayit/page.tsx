@@ -7,6 +7,7 @@ import GoogleSignInButton from '@/components/feature/GoogleSignInButton';
 import { useAuth } from '@/hooks/useAuth';
 import { ASSETS } from '@/lib/assets';
 import { GOOGLE_CLIENT_ID } from '@/lib/site';
+import { homeForRole } from '@/lib/redirect';
 
 export default function RegisterPage() {
   const { t } = useTranslation('common');
@@ -28,13 +29,29 @@ export default function RegisterPage() {
   const handleGoogle = useCallback(
     async (credential: string) => {
       setError('');
+      if (role === 'employer') {
+        if (!companyName.trim()) {
+          setError('Google ile işveren kaydı için şirket adı gerekli.');
+          return;
+        }
+        if (vergiNumarasi.replace(/\D/g, '').length !== 10) {
+          setError('Google ile işveren kaydı için 10 haneli vergi numarası gerekli.');
+          return;
+        }
+      }
       setIsLoading(true);
-      const result = await signInWithGoogle(credential, role);
+      const result = await signInWithGoogle(
+        credential,
+        role,
+        role === 'employer'
+          ? { companyName: companyName.trim(), vergiNumarasi: vergiNumarasi.replace(/\D/g, '') }
+          : undefined,
+      );
       setIsLoading(false);
-      if (result.success) navigate(role === 'employer' ? '/profil/isveren' : '/');
+      if (result.success) navigate(homeForRole(result.profile?.role || role));
       else setError(result.error || 'Google kaydı başarısız');
     },
-    [navigate, role, signInWithGoogle],
+    [companyName, navigate, role, signInWithGoogle, vergiNumarasi],
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -331,6 +348,11 @@ export default function RegisterPage() {
                       <span className="px-2 bg-background-50 dark:bg-background-100 text-foreground-500">veya Google</span>
                     </div>
                   </div>
+                  {role === 'employer' && (
+                    <p className="text-xs text-foreground-500 mb-2 text-center">
+                      Google ile işveren kaydı için önce şirket adı ve vergi numarasını doldurun.
+                    </p>
+                  )}
                   <GoogleSignInButton onCredential={handleGoogle} disabled={isLoading} />
                 </div>
               )}

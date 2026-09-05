@@ -71,3 +71,20 @@ export async function sendEmployerVerifiedEmail(email, companyName) {
     text: `Merhaba,\n\n${companyName || 'İşveren'} hesabınız doğrulandı. Artık ilan yayınlayabilirsiniz.\n${siteUrl()}/ilan-ekle\n\n— İzmir İş İlanları 35`,
   });
 }
+
+const APP_STATUS_TR = {
+  pending: 'Değerlendiriliyor',
+  reviewed: 'İncelendi',
+  accepted: 'Kabul edildi',
+  rejected: 'Reddedildi',
+};
+
+export async function sendApplicationStatusEmail(email, jobTitle, status) {
+  if (!email) return { ok: false, skipped: true };
+  const label = APP_STATUS_TR[status] || status;
+  return sendMail({
+    to: email,
+    subject: `Başvuru durumu: ${jobTitle}`,
+    text: `"${jobTitle}" ilanına yaptığınız başvurunun durumu güncellendi: ${label}.\n${siteUrl()}/basvurularim\n\n— İzmir İş İlanları 35`,
+  });
+}

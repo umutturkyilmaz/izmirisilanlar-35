@@ -16,6 +16,7 @@ interface FavoriteJob {
   salary_min: number | null;
   salary_max: number | null;
   created_at: string;
+  job_status?: string;
 }
 
 export default function FavoritesPage() {
@@ -126,6 +127,17 @@ export default function FavoritesPage() {
                       <span className="px-2 py-0.5 rounded-md text-xs bg-secondary-100 text-secondary-800 dark:bg-secondary-900/30 dark:text-secondary-300">
                         {fav.sector}
                       </span>
+                      {fav.job_status && fav.job_status !== 'active' && (
+                        <span className="px-2 py-0.5 rounded-md text-xs bg-amber-100 text-amber-800">
+                          {fav.job_status === 'expired'
+                            ? 'Süresi doldu'
+                            : fav.job_status === 'closed'
+                              ? 'Kapatıldı'
+                              : fav.job_status === 'pending'
+                                ? 'Onay bekliyor'
+                                : fav.job_status}
+                        </span>
+                      )}
                       {fav.salary_min && fav.salary_max && (
                         <span className="text-xs text-foreground-600">
                           {fav.salary_min.toLocaleString('tr-TR')} - {fav.salary_max.toLocaleString('tr-TR')} TL

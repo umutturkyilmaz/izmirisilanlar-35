@@ -25,7 +25,7 @@ interface AuthState {
   profile: Profile | null;
   loading: boolean;
   error: string | null;
-  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string; profile?: Profile }>;
   signUp: (data: {
     email: string;
     password: string;
@@ -39,7 +39,11 @@ interface AuthState {
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ success: boolean; error?: string }>;
-  signInWithGoogle: (credential: string, role?: 'candidate' | 'employer') => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogle: (
+    credential: string,
+    role?: 'candidate' | 'employer',
+    extras?: { companyName?: string; vergiNumarasi?: string },
+  ) => Promise<{ success: boolean; error?: string; profile?: Profile }>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -89,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(data.user);
       setProfile(data.profile);
       setSession({ access_token: data.token });
-      return { success: true };
+      return { success: true, profile: data.profile };
     } catch (e) {
       return { success: false, error: e instanceof Error ? e.message : 'Giriş başarısız' };
     }
@@ -150,17 +154,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signInWithGoogle = async (credential: string, role?: 'candidate' | 'employer') => {
+  const signInWithGoogle = async (
+    credential: string,
+    role?: 'candidate' | 'employer',
+    extras?: { companyName?: string; vergiNumarasi?: string },
+  ) => {
     try {
       const data = await api<{ token: string; user: Profile; profile: Profile }>('/api/auth/google', {
-        body: { credential, role },
+        body: {
+          credential,
+          role,
+          company_name: extras?.companyName,
+          vergi_numarasi: extras?.vergiNumarasi,
+        },
         auth: false,
       });
       setToken(data.token);
       setUser(data.user);
       setProfile(data.profile);
       setSession({ access_token: data.token });
-      return { success: true };
+      return { success: true, profile: data.profile };
     } catch (e) {
       return { success: false, error: e instanceof Error ? e.message : 'Google girişi başarısız' };
     }
