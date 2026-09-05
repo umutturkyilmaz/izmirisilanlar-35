@@ -22,6 +22,7 @@ const PaymentSuccess = lazy(() => import("../pages/odeme/basarili/page"));
 const PaymentCancel = lazy(() => import("../pages/odeme/iptal/page"));
 const ForgotPassword = lazy(() => import("../pages/sifremi-unuttum/page"));
 const ResetPassword = lazy(() => import("../pages/sifre-sifirla/page"));
+const EmailVerify = lazy(() => import("../pages/email-dogrula/page"));
 const ProfileRedirect = lazy(() => import("../pages/profil/redirect"));
 const KvkkPage = lazy(() =>
   import("../pages/yasal/pages").then((m) => ({ default: m.KvkkPage })),
@@ -61,6 +62,7 @@ const routes: RouteObject[] = [
   { path: "/kayit", element: <Register /> },
   { path: "/sifremi-unuttum", element: <ForgotPassword /> },
   { path: "/sifre-sifirla", element: <ResetPassword /> },
+  { path: "/email-dogrula", element: <EmailVerify /> },
   { path: "/hakkimizda", element: <About /> },
   { path: "/iletisim", element: <Contact /> },
   { path: "/kvkk", element: <KvkkPage /> },

@@ -4,6 +4,7 @@ import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
+import { jobEditPath } from '@/lib/jobPath';
 import DashboardSection from '@/pages/admin/components/DashboardSection';
 import PaymentsSection from '@/pages/admin/components/PaymentsSection';
 import ContactMessagesSection from '@/pages/admin/components/ContactMessagesSection';
@@ -24,6 +25,7 @@ interface EmployerProfile {
 
 interface JobWithEmployer {
   id: string;
+  slug?: string | null;
   title: string;
   company_name: string;
   city: string;
@@ -215,10 +217,13 @@ export default function AdminPage() {
   const handleRepairImages = async () => {
     setJobActionMsg(null);
     try {
-      const r = await api<{ checked: number }>('/api/admin/repair-images', { method: 'POST', body: {} });
+      const r = await api<{ checked: number; cleared?: number }>('/api/admin/repair-images', {
+        method: 'POST',
+        body: {},
+      });
       setJobActionMsg({
         type: 'success',
-        text: `Görsel onarımı tamamlandı (${r.checked} ilan tarandı). Kırık URL’ler temizlendi.`,
+        text: `Görsel onarımı: ${r.checked} tarandı, ${r.cleared ?? 0} kırık temizlendi.`,
       });
       await fetchJobs();
     } catch (err) {
@@ -750,7 +755,7 @@ export default function AdminPage() {
                             <td className="px-4 py-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">
                                 <Link
-                                  to={`/ilan/${job.id}/duzenle?from=admin`}
+                                  to={jobEditPath(job, true)}
                                   className="w-8 h-8 rounded-lg flex items-center justify-center text-primary-600 hover:text-primary-700 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
                                   title="Düzenle"
                                 >
@@ -957,7 +962,7 @@ export default function AdminPage() {
 
               <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-background-100 dark:border-background-200">
                 <Link
-                  to={`/ilan/${jobDetailModal.id}/duzenle?from=admin`}
+                  to={jobEditPath(jobDetailModal, true)}
                   className="flex-1 min-w-[140px] px-4 py-2.5 text-sm font-medium text-center bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors whitespace-nowrap"
                 >
                   <i className="ri-pencil-line mr-1.5" />Düzenle

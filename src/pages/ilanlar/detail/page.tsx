@@ -8,9 +8,12 @@ import JobImage from '@/components/feature/JobImage';
 import { ASSETS } from '@/lib/assets';
 import { EXPERIENCE_LABELS, formatSalary } from '@/lib/jobLabels';
 import { checkRateLimit } from '@/lib/rateLimit';
+import DocumentHead from '@/components/feature/DocumentHead';
+import { jobPath } from '@/lib/jobPath';
 
 interface Job {
   id: string;
+  slug?: string | null;
   title: string;
   company_name: string;
   city: string;
@@ -31,6 +34,7 @@ interface Job {
 
 interface SimilarJob {
   id: string;
+  slug?: string | null;
   title: string;
   company_name: string;
   city: string;
@@ -233,6 +237,26 @@ export default function JobDetailPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <DocumentHead
+        title={job.title}
+        description={`${job.company_name || ''} · ${job.city || 'İzmir'} — ${String(job.description || '').slice(0, 140)}`}
+        path={jobPath(job)}
+        image={job.image_url}
+        jsonLdId="job"
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'JobPosting',
+          title: job.title,
+          description: job.description,
+          hiringOrganization: { '@type': 'Organization', name: job.company_name },
+          jobLocation: {
+            '@type': 'Place',
+            address: { '@type': 'PostalAddress', addressLocality: job.city || 'İzmir', addressCountry: 'TR' },
+          },
+          datePosted: job.created_at,
+          validThrough: job.expires_at,
+        }}
+      />
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-12">
         <div className="px-4 md:px-6 lg:px-8 max-w-4xl mx-auto">
@@ -432,7 +456,7 @@ export default function JobDetailPage() {
                 {similarJobs.map((sJob) => (
                   <Link
                     key={sJob.id}
-                    to={`/ilan/${sJob.id}`}
+                    to={jobPath(sJob)}
                     className="bg-background-50 dark:bg-background-100 rounded-xl border border-background-200 hover:border-primary-300 dark:hover:border-primary-600 p-5 transition-all group"
                   >
                     <div className="flex items-start justify-between mb-2">

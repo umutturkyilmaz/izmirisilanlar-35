@@ -4,10 +4,12 @@ import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
+import { jobPath } from '@/lib/jobPath';
 
 interface FavoriteJob {
   id: string;
   job_id: string;
+  slug?: string | null;
   title: string;
   company_name: string;
   city: string;
@@ -117,7 +119,7 @@ export default function FavoritesPage() {
               {favorites.map((fav) => (
                 <div key={fav.id} className="bg-background-50 dark:bg-background-100 rounded-xl border border-background-200 dark:border-background-200 p-4 md:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
                   <div className="flex-1 min-w-0">
-                    <Link to={`/ilan/${fav.job_id}`} className="font-heading font-semibold text-sm md:text-base text-foreground-950 hover:text-primary-600 transition-colors">
+                    <Link to={jobPath({ id: fav.job_id, slug: fav.slug })} className="font-heading font-semibold text-sm md:text-base text-foreground-950 hover:text-primary-600 transition-colors">
                       {fav.title}
                     </Link>
                     <p className="text-xs text-foreground-500 mt-0.5">
@@ -147,7 +149,7 @@ export default function FavoritesPage() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Link
-                      to={`/ilan/${fav.job_id}`}
+                      to={jobPath({ id: fav.job_id, slug: fav.slug })}
                       className="px-4 py-2 text-xs font-medium bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors whitespace-nowrap"
                     >
                       İncele

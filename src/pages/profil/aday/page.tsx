@@ -6,10 +6,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { uploadUserFile } from '@/lib/storage';
 import { openAuthedFile } from '@/lib/files';
+import { jobPath } from '@/lib/jobPath';
 
 interface Application {
   id: string;
   job_id: string;
+  job_slug?: string | null;
   status: string;
   cover_letter: string | null;
   created_at: string;
@@ -34,10 +36,24 @@ export default function CandidateProfilePage() {
   );
   const [pwdForm, setPwdForm] = useState({ current: '', next: '' });
   const [pwdMsg, setPwdMsg] = useState('');
+  const [verifyMsg, setVerifyMsg] = useState('');
 
   useEffect(() => {
     if (location.pathname.includes('basvurularim')) setTab('applications');
   }, [location.pathname]);
+
+  const handleResendVerify = async () => {
+    setVerifyMsg('');
+    try {
+      const data = await api<{ message?: string }>('/api/auth/resend-verification', {
+        method: 'POST',
+        body: {},
+      });
+      setVerifyMsg(data.message || 'Doğrulama e-postası gönderildi');
+    } catch (err) {
+      setVerifyMsg(err instanceof Error ? err.message : 'Gönderilemedi');
+    }
+  };
 
   const handleChangePassword = async () => {
     setPwdMsg('');
@@ -191,6 +207,21 @@ export default function CandidateProfilePage() {
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-12">
         <div className="px-4 md:px-6 lg:px-8 max-w-4xl mx-auto">
+          {profile.email_verified === false && (
+            <div className="mb-4 p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-sm flex flex-col sm:flex-row sm:items-center gap-3">
+              <p className="flex-1">
+                E-posta adresiniz henüz doğrulanmadı. Başvuru için doğrulama gerekir.
+              </p>
+              <button
+                type="button"
+                onClick={() => void handleResendVerify()}
+                className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium whitespace-nowrap"
+              >
+                Tekrar gönder
+              </button>
+              {verifyMsg && <span className="text-xs">{verifyMsg}</span>}
+            </div>
+          )}
           {/* Profile Header */}
           <div className="bg-background-50 dark:bg-background-100 rounded-2xl border border-background-200 dark:border-background-200 p-6 md:p-8 mb-6">
             <div className="flex items-center gap-4 mb-6">
@@ -433,7 +464,7 @@ export default function CandidateProfilePage() {
                   <div key={app.id} className="bg-background-50 dark:bg-background-100 rounded-xl border border-background-200 dark:border-background-200 p-4 md:p-5">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div>
-                        <Link to={`/ilan/${app.job_id}`} className="font-heading font-semibold text-sm md:text-base text-foreground-950 hover:text-primary-600 transition-colors">
+                        <Link to={jobPath({ id: app.job_id, slug: app.job_slug })} className="font-heading font-semibold text-sm md:text-base text-foreground-950 hover:text-primary-600 transition-colors">
                           {app.job_title}
                         </Link>
                         <p className="text-xs text-foreground-500 mt-0.5">

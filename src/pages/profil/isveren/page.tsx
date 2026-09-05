@@ -7,9 +7,11 @@ import { api } from '@/lib/api';
 import ApplicationsSection from '@/pages/profil/isveren/components/ApplicationsSection';
 import { fetchCredits } from '@/lib/credits';
 import { downloadInvoicePdf } from '@/lib/invoice';
+import { jobEditPath, jobPath } from '@/lib/jobPath';
 
 interface JobListing {
   id: string;
+  slug?: string | null;
   title: string;
   company_name: string;
   city: string;
@@ -708,7 +710,7 @@ export default function EmployerProfilePage() {
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <Link to={`/ilan/${job.id}`} className="font-heading font-semibold text-sm md:text-base text-foreground-950 hover:text-primary-600 transition-colors">
+                          <Link to={jobPath(job)} className="font-heading font-semibold text-sm md:text-base text-foreground-950 hover:text-primary-600 transition-colors">
                             {job.title}
                           </Link>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${jobStatusColors[job.status] || ''}`}>
@@ -721,7 +723,7 @@ export default function EmployerProfilePage() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0 flex-wrap">
                         <Link
-                          to={`/ilan/${job.id}/duzenle`}
+                          to={jobEditPath(job)}
                           className="px-3 py-1.5 text-xs font-medium bg-background-200 rounded-lg hover:bg-background-300 whitespace-nowrap"
                         >
                           Düzenle

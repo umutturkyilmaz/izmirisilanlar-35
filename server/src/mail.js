@@ -104,3 +104,13 @@ export async function sendApplicationStatusEmail(email, jobTitle, status) {
     text: `"${jobTitle}" ilanına yaptığınız başvurunun durumu güncellendi: ${label}.\n${siteUrl()}/basvurularim\n\n— İzmir İş İlanları 35`,
   });
 }
+
+export async function sendEmailVerification(email, token) {
+  const link = `${siteUrl()}/email-dogrula?token=${encodeURIComponent(token)}`;
+  return sendMail({
+    to: email,
+    subject: 'E-posta doğrulama — İzmir İş İlanları 35',
+    text: `Hesabınızı doğrulamak için linke tıklayın (24 saat geçerli):\n\n${link}\n\nBu isteği siz yapmadıysanız yok sayın.`,
+    html: `<p>Hesabınızı doğrulamak için aşağıdaki bağlantıyı kullanın (24 saat geçerli):</p><p><a href="${link}">${link}</a></p>`,
+  });
+}

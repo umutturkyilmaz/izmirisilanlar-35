@@ -4,9 +4,12 @@ import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { api } from '@/lib/api';
 import JobImage from '@/components/feature/JobImage';
+import DocumentHead from '@/components/feature/DocumentHead';
+import { jobPath } from '@/lib/jobPath';
 
 interface Job {
   id: string;
+  slug?: string | null;
   title: string;
   company_name: string;
   city: string;
@@ -177,6 +180,7 @@ export default function JobListingsPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <DocumentHead title="İş İlanları" description="İzmir ve Türkiye genelinde güncel iş ilanları." path="/ilanlar" />
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-12">
         {/* Page Header */}
@@ -415,7 +419,7 @@ export default function JobListingsPage() {
                   {jobs.map((job) => (
                     <Link
                       key={job.id}
-                      to={`/ilan/${job.id}`}
+                      to={jobPath(job)}
                       className="group bg-background-50 dark:bg-background-100 rounded-xl border border-background-200 p-4 md:p-5 hover:border-primary-300 dark:hover:border-primary-700 transition-all duration-300 hover:-translate-y-0.5"
                     >
                       <div className="flex flex-col sm:flex-row gap-4">

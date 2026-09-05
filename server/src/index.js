@@ -18,6 +18,7 @@ import {
   sendNewApplicationEmail,
   sendEmployerVerifiedEmail,
   sendApplicationStatusEmail,
+  sendEmailVerification,
 } from './mail.js';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -25,8 +26,30 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8080);
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-change-me';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+/** Google giriş kapalı; açmak için GOOGLE_AUTH_ENABLED=true + GOOGLE_CLIENT_ID */
+const GOOGLE_AUTH_ENABLED = process.env.GOOGLE_AUTH_ENABLED === 'true';
+const GOOGLE_CLIENT_ID = GOOGLE_AUTH_ENABLED ? process.env.GOOGLE_CLIENT_ID || '' : '';
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+
+function makeJobSlug(title, id) {
+  const base = String(title || 'ilan')
+    .toLowerCase()
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ı/g, 'i')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  const short = String(id || '').replace(/-/g, '').slice(0, 8);
+  return `${base || 'ilan'}-${short}`;
+}
+
+function uid() {
+  return crypto.randomUUID();
+}
 
 if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || JWT_SECRET === 'dev-change-me')) {
   console.error('FATAL: JWT_SECRET production ortamında zorunlu');
@@ -65,6 +88,9 @@ async function ensureSchema() {
     `ALTER TABLE users ADD UNIQUE INDEX uq_users_google (google_id)`,
     `ALTER TABLE jobs ADD COLUMN credit_id CHAR(36) NULL`,
     `ALTER TABLE contact_messages ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 0`,
+    `ALTER TABLE jobs ADD COLUMN slug VARCHAR(191) NULL`,
+    `ALTER TABLE jobs ADD UNIQUE INDEX uq_jobs_slug (slug)`,
+    `ALTER TABLE users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 1`,
   ]) {
     try {
       await pool.query(sql);
@@ -82,12 +108,35 @@ async function ensureSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS email_verifications (
+      token CHAR(64) PRIMARY KEY,
+      user_id CHAR(36) NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_ev_user (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS rate_limits (
       id_key VARCHAR(191) PRIMARY KEY,
       hit_count INT NOT NULL DEFAULT 0,
       window_start DATETIME NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  // Mevcut ilanlara slug backfill
+  try {
+    const [needSlug] = await pool.query(`SELECT id, title FROM jobs WHERE slug IS NULL OR slug = '' LIMIT 500`);
+    for (const row of needSlug) {
+      const slug = makeJobSlug(row.title, row.id);
+      try {
+        await pool.query('UPDATE jobs SET slug = ? WHERE id = ?', [slug, row.id]);
+      } catch {
+        await pool.query('UPDATE jobs SET slug = ? WHERE id = ?', [`${slug}-${row.id.slice(0, 6)}`, row.id]);
+      }
+    }
+  } catch (e) {
+    console.warn('slug backfill', e.message);
+  }
 }
 
 const app = express();
@@ -190,10 +239,6 @@ function filePublicOrPrivateUrl(req, filename, isPrivate) {
   return `${base}/uploads/${filename}`;
 }
 
-function uid() {
-  return crypto.randomUUID();
-}
-
 function publicUrl(req, filename) {
   if (!filename) return null;
   const base = process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`;
@@ -211,7 +256,10 @@ function signUser(user) {
 function profileRow(row) {
   if (!row) return null;
   const { password_hash, ...rest } = row;
-  return rest;
+  return {
+    ...rest,
+    email_verified: row.email_verified === undefined ? true : !!row.email_verified,
+  };
 }
 
 async function auth(req, res, next) {
@@ -287,8 +335,8 @@ app.post('/api/auth/register', async (req, res) => {
     const pending = role === 'employer' && vergi_numarasi;
     await pool.query(
       `INSERT INTO users
-      (id, email, password_hash, role, full_name, phone, city, company_name, vergi_numarasi, dogrulama_durumu, dogrulama_talebi_tarihi)
-      VALUES (:id, :email, :hash, :role, :full_name, :phone, :city, :company_name, :vergi, :durum, :talep)`,
+      (id, email, password_hash, role, full_name, phone, city, company_name, vergi_numarasi, dogrulama_durumu, dogrulama_talebi_tarihi, email_verified)
+      VALUES (:id, :email, :hash, :role, :full_name, :phone, :city, :company_name, :vergi, :durum, :talep, 0)`,
       {
         id,
         email: String(email).trim().toLowerCase(),
@@ -305,8 +353,19 @@ app.post('/api/auth/register', async (req, res) => {
     );
     const [rows] = await pool.query('SELECT * FROM users WHERE id = :id', { id });
     const user = rows[0];
+    const verifyToken = crypto.randomBytes(32).toString('hex');
+    await pool.query(
+      `INSERT INTO email_verifications (token, user_id, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 24 HOUR))`,
+      [verifyToken, id],
+    );
+    void sendEmailVerification(user.email, verifyToken);
     const token = signUser(user);
-    res.json({ token, user: profileRow(user), profile: profileRow(user) });
+    res.json({
+      token,
+      user: profileRow(user),
+      profile: profileRow(user),
+      message: 'Kayıt başarılı. E-posta doğrulama bağlantısı gönderildi (SMTP açıksa).',
+    });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Bu e-posta kayıtlı' });
     res.status(500).json({ error: e.message });
@@ -343,6 +402,37 @@ app.post('/api/auth/change-password', auth, async (req, res) => {
   const hash = await bcrypt.hash(next, 10);
   await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, req.user.id]);
   res.json({ ok: true, message: 'Şifre güncellendi' });
+});
+
+app.post('/api/auth/verify-email', async (req, res) => {
+  const token = String(req.body?.token || '').trim();
+  if (!token) return res.status(400).json({ error: 'Token gerekli' });
+  const [rows] = await pool.query(
+    'SELECT * FROM email_verifications WHERE token = ? AND expires_at > NOW() LIMIT 1',
+    [token],
+  );
+  const row = rows[0];
+  if (!row) return res.status(400).json({ error: 'Geçersiz veya süresi dolmuş bağlantı' });
+  await pool.query('UPDATE users SET email_verified = 1 WHERE id = ?', [row.user_id]);
+  await pool.query('DELETE FROM email_verifications WHERE user_id = ?', [row.user_id]);
+  res.json({ ok: true, message: 'E-posta adresiniz doğrulandı. Giriş yapabilirsiniz.' });
+});
+
+app.post('/api/auth/resend-verification', auth, async (req, res) => {
+  if (req.user.email_verified) {
+    return res.json({ ok: true, message: 'E-posta zaten doğrulanmış' });
+  }
+  if (!isMailReady()) {
+    return res.status(503).json({ error: 'E-posta servisi şu an kapalı' });
+  }
+  const token = crypto.randomBytes(32).toString('hex');
+  await pool.query('DELETE FROM email_verifications WHERE user_id = ?', [req.user.id]);
+  await pool.query(
+    `INSERT INTO email_verifications (token, user_id, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 24 HOUR))`,
+    [token, req.user.id],
+  );
+  await sendEmailVerification(req.user.email, token);
+  res.json({ ok: true, message: 'Doğrulama e-postası gönderildi' });
 });
 
 app.get('/api/auth/me', auth, (req, res) => {
@@ -434,12 +524,16 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 app.get('/api/auth/google/status', (_req, res) => {
-  res.json({ enabled: Boolean(GOOGLE_CLIENT_ID), clientId: GOOGLE_CLIENT_ID || null });
+  res.json({
+    enabled: Boolean(GOOGLE_CLIENT_ID),
+    clientId: GOOGLE_CLIENT_ID || null,
+    note: GOOGLE_AUTH_ENABLED ? null : 'Google giriş kapalı (GOOGLE_AUTH_ENABLED)',
+  });
 });
 
 app.post('/api/auth/google', async (req, res) => {
-  if (!googleClient || !GOOGLE_CLIENT_ID) {
-    return res.status(503).json({ error: 'Google girişi yapılandırılmamış (GOOGLE_CLIENT_ID)' });
+  if (!GOOGLE_AUTH_ENABLED || !googleClient || !GOOGLE_CLIENT_ID) {
+    return res.status(503).json({ error: 'Google girişi kapalı' });
   }
   try {
     const credential = req.body?.credential;
@@ -662,7 +756,11 @@ app.get('/api/jobs/stats', async (_req, res) => {
 });
 
 app.get('/api/jobs/:id', optionalAuth, async (req, res) => {
-  const [rows] = await pool.query('SELECT * FROM jobs WHERE id = :id LIMIT 1', { id: req.params.id });
+  const key = req.params.id;
+  const [rows] = await pool.query(
+    'SELECT * FROM jobs WHERE id = :id OR slug = :id LIMIT 1',
+    { id: key },
+  );
   const job = rows[0];
   if (!job) return res.status(404).json({ error: 'İlan yok' });
   const can =
@@ -727,13 +825,14 @@ app.post('/api/jobs', auth, async (req, res) => {
     }
 
     const id = uid();
+    const slug = makeJobSlug(title, id);
     await conn.query(
       `INSERT INTO jobs
       (id, employer_id, title, category_id, sector, description, company_name, city, job_type, experience_level,
-       salary_min, salary_max, requirements, benefits, image_url, status, featured, expires_at, credit_id)
+       salary_min, salary_max, requirements, benefits, image_url, status, featured, expires_at, credit_id, slug)
       VALUES
       (:id, :employer_id, :title, :category_id, :sector, :description, :company_name, :city, :job_type, :experience_level,
-       :salary_min, :salary_max, :requirements, :benefits, :image_url, :status, :featured, :expires_at, :credit_id)`,
+       :salary_min, :salary_max, :requirements, :benefits, :image_url, :status, :featured, :expires_at, :credit_id, :slug)`,
       {
         id,
         employer_id: req.user.id,
@@ -754,6 +853,7 @@ app.post('/api/jobs', auth, async (req, res) => {
         featured: featured ? 1 : 0,
         expires_at: expiresAt,
         credit_id: usedCreditId,
+        slug,
       },
     );
     const [rows] = await conn.query('SELECT * FROM jobs WHERE id = :id', { id });
@@ -769,7 +869,7 @@ app.post('/api/jobs', auth, async (req, res) => {
 });
 
 app.patch('/api/jobs/:id', auth, async (req, res) => {
-  const [rows] = await pool.query('SELECT * FROM jobs WHERE id = :id', { id: req.params.id });
+  const [rows] = await pool.query('SELECT * FROM jobs WHERE id = :id OR slug = :id', { id: req.params.id });
   const job = rows[0];
   if (!job) return res.status(404).json({ error: 'İlan yok' });
   if (job.employer_id !== req.user.id && req.user.role !== 'admin') {
@@ -794,7 +894,7 @@ app.patch('/api/jobs/:id', auth, async (req, res) => {
   const adminOnly = ['status', 'featured', 'expires_at'];
   const allowed = isAdmin ? [...employerAllowed, ...adminOnly] : employerAllowed;
   const sets = [];
-  const params = { id: req.params.id };
+  const params = { id: job.id };
   for (const key of allowed) {
     if (req.body[key] !== undefined) {
       sets.push(`${key} = :${key}`);
@@ -829,7 +929,7 @@ app.patch('/api/jobs/:id', auth, async (req, res) => {
   }
 
   await pool.query(`UPDATE jobs SET ${sets.join(', ')} WHERE id = :id`, params);
-  const [next] = await pool.query('SELECT * FROM jobs WHERE id = :id', { id: req.params.id });
+  const [next] = await pool.query('SELECT * FROM jobs WHERE id = :id', { id: job.id });
   res.json(parseJob(next[0]));
 });
 
@@ -843,9 +943,10 @@ app.post('/api/jobs/:id/renew', auth, async (req, res) => {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const [jobs] = await conn.query('SELECT * FROM jobs WHERE id = :id LIMIT 1 FOR UPDATE', {
-      id: req.params.id,
-    });
+    const [jobs] = await conn.query(
+      'SELECT * FROM jobs WHERE id = :id OR slug = :id LIMIT 1 FOR UPDATE',
+      { id: req.params.id },
+    );
     const job = jobs[0];
     if (!job) {
       await conn.rollback();
@@ -945,6 +1046,11 @@ app.post('/api/applications', auth, async (req, res) => {
   if (req.user.role !== 'candidate') {
     return res.status(403).json({ error: 'Yalnızca adaylar başvurabilir' });
   }
+  if (isMailReady() && !req.user.email_verified) {
+    return res.status(403).json({
+      error: 'Başvuru için önce e-posta adresinizi doğrulayın. Profilinizden tekrar gönderebilirsiniz.',
+    });
+  }
   try {
     const { job_id, cover_letter, cv_url } = req.body || {};
     if (!job_id) return res.status(400).json({ error: 'İlan gerekli' });
@@ -993,7 +1099,7 @@ app.post('/api/applications', auth, async (req, res) => {
 
 app.get('/api/applications/mine', auth, async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT a.*, j.title AS job_title, j.company_name, j.city, j.sector
+    `SELECT a.*, j.title AS job_title, j.slug AS job_slug, j.company_name, j.city, j.sector
      FROM applications a
      LEFT JOIN jobs j ON j.id = a.job_id
      WHERE a.candidate_id = :id
@@ -1066,7 +1172,7 @@ app.patch('/api/applications/:id', auth, async (req, res) => {
 // ---- Favorites ----
 app.get('/api/favorites', auth, async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT f.id, f.job_id, f.created_at, j.title, j.company_name, j.city, j.sector, j.job_type, j.salary_min, j.salary_max, j.status AS job_status
+    `SELECT f.id, f.job_id, f.created_at, j.title, j.slug, j.company_name, j.city, j.sector, j.job_type, j.salary_min, j.salary_max, j.status AS job_status
      FROM favorites f
      INNER JOIN jobs j ON j.id = f.job_id
      WHERE f.user_id = :id
@@ -1471,20 +1577,39 @@ app.patch('/api/admin/users/:id', auth, async (req, res) => {
 
 app.post('/api/admin/repair-images', auth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
-  const [jobs] = await pool.query('SELECT id, image_url FROM jobs WHERE image_url IS NOT NULL');
+  const [jobs] = await pool.query('SELECT id, title, image_url FROM jobs WHERE image_url IS NOT NULL');
+  const before = jobs.map((j) => ({ id: j.id, title: j.title, image_url: j.image_url }));
   await sanitizeJobImages(jobs);
-  const cleared = jobs.filter((j) => j.image_url === null).length;
-  res.json({ checked: jobs.length, note: 'Kırık URL’ler temizlendi (sanitize)' });
+  const clearedJobs = before.filter((b) => {
+    const after = jobs.find((j) => j.id === b.id);
+    return after && after.image_url === null && b.image_url;
+  });
+  res.json({
+    ok: true,
+    checked: jobs.length,
+    cleared: clearedJobs.length,
+    cleared_ids: clearedJobs.map((j) => j.id),
+    note:
+      clearedJobs.length > 0
+        ? `${clearedJobs.length} kırık görsel temizlendi.`
+        : 'Kırık görsel bulunamadı.',
+  });
 });
 
 app.delete('/api/jobs/:id', auth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Yalnızca admin silebilir' });
+  const [found] = await pool.query('SELECT id FROM jobs WHERE id = ? OR slug = ? LIMIT 1', [
+    req.params.id,
+    req.params.id,
+  ]);
+  const jobId = found[0]?.id;
+  if (!jobId) return res.status(404).json({ error: 'İlan yok' });
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    await conn.query('DELETE FROM applications WHERE job_id = ?', [req.params.id]);
-    await conn.query('DELETE FROM favorites WHERE job_id = ?', [req.params.id]);
-    const [r] = await conn.query('DELETE FROM jobs WHERE id = ?', [req.params.id]);
+    await conn.query('DELETE FROM applications WHERE job_id = ?', [jobId]);
+    await conn.query('DELETE FROM favorites WHERE job_id = ?', [jobId]);
+    const [r] = await conn.query('DELETE FROM jobs WHERE id = ?', [jobId]);
     await conn.commit();
     if (!r.affectedRows) return res.status(404).json({ error: 'İlan yok' });
     res.json({ ok: true });

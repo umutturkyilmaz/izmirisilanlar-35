@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
 import JobImage from '@/components/feature/JobImage';
+import { jobPath } from '@/lib/jobPath';
 
 interface Job {
   id: string;
+  slug?: string | null;
   title: string;
   company_name: string;
   city: string;
@@ -152,7 +154,7 @@ export default function FeaturedJobsSection() {
                         {new Date(job.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}
                       </span>
                       <Link
-                        to={`/ilan/${job.id}`}
+                        to={jobPath(job)}
                         className="px-3 py-1.5 text-xs font-medium bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors whitespace-nowrap"
                       >
                         {t('featuredJobs.applyNow')}

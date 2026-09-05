@@ -5,7 +5,11 @@ export const SOCIAL_LINKS = {
   linkedin: (import.meta.env.VITE_SOCIAL_LINKEDIN || '').trim(),
 } as const;
 
-export const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+/** Google giriş kapalı. Açmak: VITE_GOOGLE_AUTH_ENABLED=true + VITE_GOOGLE_CLIENT_ID */
+export const GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_AUTH_ENABLED === 'true'
+    ? (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim()
+    : '';
 
 /** Sitede görünen iletişim — WhatsApp odaklı */
 export const CONTACT = {

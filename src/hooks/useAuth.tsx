@@ -16,6 +16,7 @@ export interface Profile {
   dogrulama_durumu: 'unverified' | 'pending' | 'verified' | 'rejected';
   dogrulama_talebi_tarihi: string | null;
   dogrulanma_tarihi: string | null;
+  email_verified?: boolean;
   created_at?: string | null;
 }
 
