@@ -106,15 +106,20 @@ export default function DashboardSection() {
       setLoading(true);
       setError(null);
 
-      const [stats, appsData, jobsData, profilesData] = await Promise.all([
+      const [statsRaw, appsRaw, jobsRaw, profilesRaw] = await Promise.all([
         api<{ jobs: number; applications: number; employers: number; candidates: number }>('/api/admin/stats'),
         api<ApplicationRow[]>('/api/applications/employer'),
         api<JobRow[]>('/api/jobs?limit=200'),
         api<ProfileRow[]>('/api/admin/users'),
       ]);
 
-      setApplications(appsData || []);
-      setJobs(jobsData || []);
+      const stats = statsRaw || { jobs: 0, applications: 0, employers: 0, candidates: 0 };
+      const appsData = Array.isArray(appsRaw) ? appsRaw : [];
+      const jobsData = Array.isArray(jobsRaw) ? jobsRaw : [];
+      const profilesData = Array.isArray(profilesRaw) ? profilesRaw : [];
+
+      setApplications(appsData);
+      setJobs(jobsData);
 
       // --- Summary ---
       const now = new Date();
@@ -123,15 +128,15 @@ export default function DashboardSection() {
       const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
       setSummary({
-        totalJobs: stats.jobs ?? (jobsData || []).length,
-        totalApps: stats.applications ?? (appsData || []).length,
-        totalEmployers: stats.employers ?? (profilesData || []).filter((p) => p.role === 'employer').length,
-        totalCandidates: stats.candidates ?? (profilesData || []).filter((p) => p.role === 'candidate').length,
-        activeJobs: (jobsData || []).filter((j) => j.status === 'active').length,
-        pendingJobs: (jobsData || []).filter((j) => j.status === 'pending').length,
-        todayApps: (appsData || []).filter((a) => a.created_at >= todayStart).length,
-        weekApps: (appsData || []).filter((a) => a.created_at >= weekAgo).length,
-        monthApps: (appsData || []).filter((a) => a.created_at >= monthAgo).length,
+        totalJobs: stats.jobs ?? jobsData.length,
+        totalApps: stats.applications ?? appsData.length,
+        totalEmployers: stats.employers ?? profilesData.filter((p) => p.role === 'employer').length,
+        totalCandidates: stats.candidates ?? profilesData.filter((p) => p.role === 'candidate').length,
+        activeJobs: jobsData.filter((j) => j.status === 'active').length,
+        pendingJobs: jobsData.filter((j) => j.status === 'pending').length,
+        todayApps: appsData.filter((a) => a.created_at >= todayStart).length,
+        weekApps: appsData.filter((a) => a.created_at >= weekAgo).length,
+        monthApps: appsData.filter((a) => a.created_at >= monthAgo).length,
       });
 
       // --- Daily Applications (last 30 days) ---
@@ -141,7 +146,7 @@ export default function DashboardSection() {
         const key = `${d.getDate()}/${d.getMonth() + 1}`;
         dailyMap[key] = 0;
       }
-      (appsData || []).forEach((a) => {
+      appsData.forEach((a) => {
         const d = new Date(a.created_at);
         const key = `${d.getDate()}/${d.getMonth() + 1}`;
         if (dailyMap[key] !== undefined) dailyMap[key]++;
@@ -151,7 +156,7 @@ export default function DashboardSection() {
 
       // --- Sector Distribution (from jobs) ---
       const sectorMap: Record<string, number> = {};
-      (jobsData || []).forEach((j) => {
+      jobsData.forEach((j) => {
         const s = j.sector || 'Diğer';
         sectorMap[s] = (sectorMap[s] || 0) + 1;
       });
@@ -163,7 +168,7 @@ export default function DashboardSection() {
 
       // --- City Distribution (from jobs) ---
       const cityMap: Record<string, number> = {};
-      (jobsData || []).forEach((j) => {
+      jobsData.forEach((j) => {
         const c = j.city || 'Belirtilmemiş';
         cityMap[c] = (cityMap[c] || 0) + 1;
       });
@@ -175,7 +180,7 @@ export default function DashboardSection() {
 
       // --- Application Status Distribution ---
       const statusMap: Record<string, number> = {};
-      (appsData || []).forEach((a) => {
+      appsData.forEach((a) => {
         const s = a.status || 'pending';
         statusMap[s] = (statusMap[s] || 0) + 1;
       });
@@ -184,9 +189,11 @@ export default function DashboardSection() {
 
       // --- Recent Applications (last 10) ---
       const jobsMap: Record<string, JobRow> = {};
-      (jobsData || []).forEach((j) => { jobsMap[j.id] = j; });
+      jobsData.forEach((j) => {
+        jobsMap[j.id] = j;
+      });
 
-      const recent: RecentApp[] = (appsData || []).slice(0, 10).map((a) => ({
+      const recent: RecentApp[] = appsData.slice(0, 10).map((a) => ({
         id: a.id,
         candidate_name: a.candidate_name || 'Bilinmiyor',
         job_title: a.job_title || jobsMap[a.job_id]?.title || 'Silinmiş İlan',
@@ -444,9 +451,9 @@ export default function DashboardSection() {
     rejected: 'bg-red-500',
   };
 
-  const maxDaily = Math.max(1, ...dailyApps.map((d) => d.count));
-  const maxSector = Math.max(1, ...sectorDist.map((s) => s.count));
-  const maxCity = Math.max(1, ...cityDist.map((c) => c.count));
+  const maxDaily = Math.max(1, ...(dailyApps.length ? dailyApps.map((d) => d.count) : [0]));
+  const maxSector = Math.max(1, ...(sectorDist.length ? sectorDist.map((s) => s.count) : [0]));
+  const maxCity = Math.max(1, ...(cityDist.length ? cityDist.map((c) => c.count) : [0]));
   const totalStatus = statusDist.reduce((sum, s) => sum + s.count, 0) || 1;
 
   if (loading) {

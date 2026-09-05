@@ -1,13 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { jobEditPath } from '@/lib/jobPath';
-import DashboardSection from '@/pages/admin/components/DashboardSection';
 import PaymentsSection from '@/pages/admin/components/PaymentsSection';
 import ContactMessagesSection from '@/pages/admin/components/ContactMessagesSection';
+
+const DashboardSection = lazy(() => import('@/pages/admin/components/DashboardSection'));
 
 interface EmployerProfile {
   id: string;
@@ -77,9 +78,11 @@ export default function AdminPage() {
       setEmpLoading(true);
       setEmpError(null);
       const data = await api<EmployerProfile[]>('/api/admin/users');
-      setEmployers((data || []).filter((u) => u.role === 'employer'));
+      const list = Array.isArray(data) ? data : [];
+      setEmployers(list.filter((u) => u.role === 'employer'));
     } catch (err) {
       setEmpError(err instanceof Error ? err.message : 'Veriler yüklenemedi');
+      setEmployers([]);
     } finally {
       setEmpLoading(false);
     }
@@ -95,12 +98,14 @@ export default function AdminPage() {
       ]);
 
       const profilesMap: Record<string, { full_name: string | null; vergi_numarasi: string | null }> = {};
-      (users || []).forEach((p) => {
+      (Array.isArray(users) ? users : []).forEach((p) => {
         profilesMap[p.id] = p;
       });
 
-      const enriched: JobWithEmployer[] = (jobsData || []).map((j: any) => ({
+      const enriched: JobWithEmployer[] = (Array.isArray(jobsData) ? jobsData : []).map((j: any) => ({
         ...j,
+        id: j.id,
+        title: j.title || 'İsimsiz ilan',
         employer_full_name: profilesMap[j.employer_id]?.full_name || null,
         employer_vergi: profilesMap[j.employer_id]?.vergi_numarasi || null,
       }));
@@ -108,6 +113,7 @@ export default function AdminPage() {
       setJobs(enriched);
     } catch (err) {
       setJobError(err instanceof Error ? err.message : 'İlanlar yüklenemedi');
+      setJobs([]);
     } finally {
       setJobLoading(false);
     }
@@ -272,7 +278,7 @@ export default function AdminPage() {
       const term = jobSearch.toLowerCase().trim();
       filtered = filtered.filter(
         (j) =>
-          j.title.toLowerCase().includes(term) ||
+          (j.title || '').toLowerCase().includes(term) ||
           (j.company_name || '').toLowerCase().includes(term) ||
           (j.city && j.city.toLowerCase().includes(term)) ||
           (j.sector && j.sector.toLowerCase().includes(term)),
@@ -811,7 +817,15 @@ export default function AdminPage() {
           )}
 
           {mainTab === 'stats' && (
-            <DashboardSection />
+            <Suspense
+              fallback={
+                <p className="text-sm text-foreground-500 py-8 text-center animate-pulse">
+                  İstatistikler yükleniyor...
+                </p>
+              }
+            >
+              <DashboardSection />
+            </Suspense>
           )}
         </div>
       </main>

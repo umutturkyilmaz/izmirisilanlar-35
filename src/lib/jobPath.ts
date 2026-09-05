@@ -1,10 +1,17 @@
 /** SEO dostu path: slug varsa onu, yoksa id */
-export function jobPath(job: { id: string; slug?: string | null }, suffix = '') {
-  const key = (job.slug || job.id).trim();
+export function jobPath(job: { id?: string | null; slug?: string | null } | null | undefined, suffix = '') {
+  const key = String(job?.slug || job?.id || '')
+    .trim();
+  if (!key) return `/ilanlar${suffix}`;
   return `/ilan/${key}${suffix}`;
 }
 
-export function jobEditPath(job: { id: string; slug?: string | null }, fromAdmin = false) {
+export function jobEditPath(
+  job: { id?: string | null; slug?: string | null } | null | undefined,
+  fromAdmin = false,
+) {
   const q = fromAdmin ? '?from=admin' : '';
-  return `${jobPath(job)}/duzenle${q}`;
+  const base = jobPath(job);
+  if (base === '/ilanlar') return `/ilanlar${q}`;
+  return `${base}/duzenle${q}`;
 }

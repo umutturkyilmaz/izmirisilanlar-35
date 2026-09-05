@@ -19,7 +19,7 @@ export default function NotificationBell() {
 
   useEffect(() => {
     if (!user) return;
-    listNotifications(user.id).then((data) => setItems(data as Note[]));
+    listNotifications(user.id).then((data) => setItems(Array.isArray(data) ? (data as Note[]) : []));
   }, [user, open]);
 
   if (!user) return null;
