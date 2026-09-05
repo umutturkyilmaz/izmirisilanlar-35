@@ -160,6 +160,16 @@ export default function Footer() {
             İzmir merkezli - Tüm Türkiye'ye hizmet veriyoruz.
           </p>
         </div>
+        <div className="mt-4 text-center">
+          <a
+            href="https://okandemir.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-foreground-500 hover:text-primary-600 transition-colors"
+          >
+            Designed By O Copyright© Dijital Pazarlama &amp; Yazılım
+          </a>
+        </div>
       </div>
     </footer>
   );
