@@ -36,11 +36,47 @@ UPDATE users SET role = 'admin' WHERE email = 'senin@email.com';
 - `GET https://API/api/health` → `ok`, `db`, `mail`, `google`
 - Sitede kayıt / giriş / ilan listesi
 
-## E-posta (API Variables)
-`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
+## E-posta (API Variables) — Gmail App Password
+
+1. https://myaccount.google.com/security → **2 Adımlı Doğrulama** açık olsun  
+2. https://myaccount.google.com/apppasswords → uygulama adı: `izmir-api` → **16 karakterlik şifre** kopyala (boşluksuz)  
+3. Railway → **API servisi** → Variables → ekle:
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=umutata355@gmail.com
+SMTP_PASS=xxxx xxxx xxxx xxxx
+SMTP_FROM=İzmir İş İlanları 35 <umutata355@gmail.com>
+CONTACT_NOTIFY_TO=umutata355@gmail.com
+```
+
+`SMTP_PASS` = App Password (normal Gmail şifresi değil).
 
 ## Google giriş
-API `GOOGLE_CLIENT_ID` + Web `VITE_GOOGLE_CLIENT_ID` (aynı). Google Cloud OAuth Web client.
+
+1. https://console.cloud.google.com/ → proje oluştur / seç  
+2. **APIs & Services → OAuth consent screen** → External → uygulama adı: İzmir İş İlanları 35 → kaydet  
+3. **Credentials → Create Credentials → OAuth client ID → Web application**  
+   - Authorized JavaScript origins:
+     - `https://izmirisilanlari35.com`
+     - `http://localhost:5173`
+   - Authorized redirect URIs: (boş bırakılabilir; GIS popup için origin yeterli)
+4. Client ID’yi kopyala (ör. `123456789-xxx.apps.googleusercontent.com`)
+
+Railway **API**:
+```
+GOOGLE_CLIENT_ID=SENIN_CLIENT_ID
+```
+
+Railway **Web** (Vite — redeploy gerekir):
+```
+VITE_GOOGLE_CLIENT_ID=SENIN_CLIENT_ID
+```
+
+Kontrol: `GET https://API/api/health` → `"mail":true,"google":true`  
+Sitede `/giris` ve `/kayit` → Google butonu görünür.
 
 ## Sosyal (Web)
 `VITE_SOCIAL_INSTAGRAM`, `VITE_SOCIAL_TWITTER`, `VITE_SOCIAL_LINKEDIN`

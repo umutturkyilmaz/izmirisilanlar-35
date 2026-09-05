@@ -54,6 +54,22 @@ export async function sendContactAckEmail(email, name) {
   });
 }
 
+export async function sendContactNotifyEmail({ name, email, subject, message }) {
+  const to =
+    process.env.CONTACT_NOTIFY_TO ||
+    process.env.SMTP_FROM?.match(/<([^>]+)>/)?.[1] ||
+    process.env.SMTP_USER ||
+    'umutata355@gmail.com';
+  return sendMail({
+    to,
+    subject: `İletişim formu: ${subject || '(konusuz)'} — ${name}`,
+    text: `Yeni iletişim mesajı\n\nAd: ${name}\nE-posta: ${email}\nKonu: ${subject || '—'}\n\n${message}`,
+    html: `<p><b>Yeni iletişim mesajı</b></p>
+<p>Ad: ${name}<br/>E-posta: <a href="mailto:${email}">${email}</a><br/>Konu: ${subject || '—'}</p>
+<pre style="white-space:pre-wrap;font-family:inherit">${String(message || '').replace(/</g, '&lt;')}</pre>`,
+  });
+}
+
 export async function sendNewApplicationEmail(employerEmail, jobTitle) {
   if (!employerEmail) return { ok: false, skipped: true };
   return sendMail({

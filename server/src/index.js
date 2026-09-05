@@ -14,6 +14,7 @@ import {
   isMailReady,
   sendPasswordResetEmail,
   sendContactAckEmail,
+  sendContactNotifyEmail,
   sendNewApplicationEmail,
   sendEmployerVerifiedEmail,
   sendApplicationStatusEmail,
@@ -1393,6 +1394,7 @@ app.post('/api/contact', async (req, res) => {
     { id, name, email, subject: subject || null, message },
   );
   void sendContactAckEmail(email, name);
+  void sendContactNotifyEmail({ name, email, subject, message });
   res.status(201).json({ ok: true, message: 'Mesajınız kaydedildi. En kısa sürede dönüş yapılacak.' });
 });
 

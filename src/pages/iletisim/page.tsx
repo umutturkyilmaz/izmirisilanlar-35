@@ -3,6 +3,7 @@ import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { api } from '@/lib/api';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { CONTACT } from '@/lib/site';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -98,7 +99,12 @@ export default function ContactPage() {
                   <i className="ri-mail-line text-lg text-primary-600 dark:text-primary-400" />
                 </div>
                 <h3 className="font-heading font-semibold text-sm text-foreground-950 mb-1">E-posta</h3>
-                <p className="text-sm text-foreground-600">destek@izmirisilanlari35.com</p>
+                <a
+                  href={`mailto:${CONTACT.email}`}
+                  className="text-sm text-foreground-600 hover:text-primary-600 transition-colors"
+                >
+                  {CONTACT.email}
+                </a>
                 <p className="text-xs text-foreground-400 mt-1">7/24 e-posta desteği</p>
               </div>
 
@@ -107,7 +113,12 @@ export default function ContactPage() {
                   <i className="ri-phone-line text-lg text-accent-600 dark:text-accent-400" />
                 </div>
                 <h3 className="font-heading font-semibold text-sm text-foreground-950 mb-1">Telefon</h3>
-                <p className="text-sm text-foreground-600">+90 232 444 35 35</p>
+                <a
+                  href={`tel:${CONTACT.phoneTel}`}
+                  className="text-sm text-foreground-600 hover:text-primary-600 transition-colors"
+                >
+                  {CONTACT.phone}
+                </a>
                 <p className="text-xs text-foreground-400 mt-1">Hafta içi 09:00 - 18:00</p>
               </div>
 
