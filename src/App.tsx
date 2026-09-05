@@ -6,6 +6,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import CookieBanner from "@/components/feature/CookieBanner";
 import ConfigBanner from "@/components/feature/ConfigBanner";
 import ErrorBoundary from "@/components/feature/ErrorBoundary";
+import WhatsAppFloat from "@/components/feature/WhatsAppFloat";
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
         <ErrorBoundary>
           <BrowserRouter basename={__BASE_PATH__}>
             <AppRoutes />
+            <WhatsAppFloat />
             <CookieBanner />
             <ConfigBanner />
           </BrowserRouter>
