@@ -67,8 +67,7 @@ export default function ContactPage() {
                   <i className="ri-map-pin-line text-lg text-secondary-600" />
                 </div>
                 <h3 className="font-heading font-semibold text-sm text-foreground-950 mb-1">Adres</h3>
-                <p className="text-sm text-foreground-600">Alsancak Mah. Kıbrıs Şehitleri Cd. No:35</p>
-                <p className="text-sm text-foreground-600">Konak / İzmir</p>
+                <p className="text-sm text-foreground-600">İzmir</p>
               </div>
               <div className="rounded-xl border border-background-200 bg-white dark:bg-background-100 p-5">
                 <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center mb-3">
