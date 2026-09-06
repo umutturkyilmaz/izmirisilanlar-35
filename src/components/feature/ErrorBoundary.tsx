@@ -12,6 +12,21 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('UI ErrorBoundary:', error, info.componentStack);
+    const msg = error?.message || '';
+    if (
+      /Failed to fetch dynamically imported module|Loading chunk|Importing a module script failed/i.test(
+        msg,
+      )
+    ) {
+      try {
+        if (!sessionStorage.getItem('chunk_load_reload')) {
+          sessionStorage.setItem('chunk_load_reload', '1');
+          window.location.reload();
+        }
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   render() {

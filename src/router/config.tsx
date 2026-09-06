@@ -1,36 +1,36 @@
-import { lazy } from "react";
 import type { RouteObject } from "react-router-dom";
 import Home from "../pages/home/page";
 import { RequireAuth } from "../components/feature/RequireAuth";
+import { lazyRetry } from "@/lib/lazyRetry";
 
-const NotFound = lazy(() => import("../pages/NotFound"));
-const JobListings = lazy(() => import("../pages/ilanlar/page"));
-const JobDetail = lazy(() => import("../pages/ilanlar/detail/page"));
-const EditJob = lazy(() => import("../pages/ilanlar/edit/page"));
-const Login = lazy(() => import("../pages/giris/page"));
-const Register = lazy(() => import("../pages/kayit/page"));
-const About = lazy(() => import("../pages/hakkimizda/page"));
-const Contact = lazy(() => import("../pages/iletisim/page"));
-const PostJob = lazy(() => import("../pages/ilan-ekle/page"));
-const CandidateProfile = lazy(() => import("../pages/profil/aday/page"));
-const EmployerProfile = lazy(() => import("../pages/profil/isveren/page"));
-const Favorites = lazy(() => import("../pages/favorilerim/page"));
-const Admin = lazy(() => import("../pages/admin/page"));
-const Packages = lazy(() => import("../pages/paketler/page"));
-const Checkout = lazy(() => import("../pages/odeme/page"));
-const PaymentSuccess = lazy(() => import("../pages/odeme/basarili/page"));
-const PaymentCancel = lazy(() => import("../pages/odeme/iptal/page"));
-const ForgotPassword = lazy(() => import("../pages/sifremi-unuttum/page"));
-const ResetPassword = lazy(() => import("../pages/sifre-sifirla/page"));
-const EmailVerify = lazy(() => import("../pages/email-dogrula/page"));
-const ProfileRedirect = lazy(() => import("../pages/profil/redirect"));
-const KvkkPage = lazy(() =>
+const NotFound = lazyRetry(() => import("../pages/NotFound"));
+const JobListings = lazyRetry(() => import("../pages/ilanlar/page"));
+const JobDetail = lazyRetry(() => import("../pages/ilanlar/detail/page"));
+const EditJob = lazyRetry(() => import("../pages/ilanlar/edit/page"));
+const Login = lazyRetry(() => import("../pages/giris/page"));
+const Register = lazyRetry(() => import("../pages/kayit/page"));
+const About = lazyRetry(() => import("../pages/hakkimizda/page"));
+const Contact = lazyRetry(() => import("../pages/iletisim/page"));
+const PostJob = lazyRetry(() => import("../pages/ilan-ekle/page"));
+const CandidateProfile = lazyRetry(() => import("../pages/profil/aday/page"));
+const EmployerProfile = lazyRetry(() => import("../pages/profil/isveren/page"));
+const Favorites = lazyRetry(() => import("../pages/favorilerim/page"));
+const Admin = lazyRetry(() => import("../pages/admin/page"));
+const Packages = lazyRetry(() => import("../pages/paketler/page"));
+const Checkout = lazyRetry(() => import("../pages/odeme/page"));
+const PaymentSuccess = lazyRetry(() => import("../pages/odeme/basarili/page"));
+const PaymentCancel = lazyRetry(() => import("../pages/odeme/iptal/page"));
+const ForgotPassword = lazyRetry(() => import("../pages/sifremi-unuttum/page"));
+const ResetPassword = lazyRetry(() => import("../pages/sifre-sifirla/page"));
+const EmailVerify = lazyRetry(() => import("../pages/email-dogrula/page"));
+const ProfileRedirect = lazyRetry(() => import("../pages/profil/redirect"));
+const KvkkPage = lazyRetry(() =>
   import("../pages/yasal/pages").then((m) => ({ default: m.KvkkPage })),
 );
-const PrivacyPage = lazy(() =>
+const PrivacyPage = lazyRetry(() =>
   import("../pages/yasal/pages").then((m) => ({ default: m.PrivacyPage })),
 );
-const DistanceSalesPage = lazy(() =>
+const DistanceSalesPage = lazyRetry(() =>
   import("../pages/yasal/pages").then((m) => ({ default: m.DistanceSalesPage })),
 );
 
