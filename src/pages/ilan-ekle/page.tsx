@@ -200,7 +200,7 @@ export default function PostJobPage() {
         type: 'success',
         message: isAdmin
           ? `İlan yayında. Süre: ${days} gün.`
-          : `İlanınız admin onayına gönderildi! Yayın süresi: ${days} gün.`,
+          : `İlan talebiniz alındı. Admin onayından sonra yayınlanır. (Hak süresi: ${days} gün)`,
       });
       setTimeout(() => navigate(isAdmin ? '/admin' : '/profil/isveren'), 2000);
     } catch (err) {
@@ -281,9 +281,13 @@ export default function PostJobPage() {
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <div className="max-w-3xl mx-auto px-4 md:px-6">
           <div className="mb-8">
-            <h1 className="font-heading font-bold text-2xl text-foreground-950">Yeni İş İlanı Yayınla</h1>
+            <h1 className="font-heading font-bold text-2xl text-foreground-950">
+              {isAdmin ? 'Site İlanı Yayınla' : 'İlan Talebi Gönder'}
+            </h1>
             <p className="text-sm text-foreground-500">
-              {isAdmin ? 'Site sahibi ilanı — paket hakkı gerekmez, doğrudan yayına alınır.' : `Kalan yayın hakkı: ${remaining}`}
+              {isAdmin
+                ? 'Yönetici ilanı — paket gerekmez, doğrudan yayına alınır.'
+                : `Doğrudan yayınlanmaz. Admin onayından sonra yayınlanır. Kalan hak: ${remaining}`}
             </p>
           </div>
 
@@ -470,7 +474,11 @@ export default function PostJobPage() {
                 disabled={submitting}
                 className="px-6 py-3 bg-primary-600 text-white font-semibold text-sm rounded-xl disabled:opacity-60"
               >
-                {submitting ? 'Gönderiliyor...' : 'İlanı Yayınla'}
+                {submitting
+                  ? 'Gönderiliyor...'
+                  : isAdmin
+                    ? 'İlanı Yayınla'
+                    : 'Admin Onayına Gönder'}
               </button>
               <Link to={isAdmin ? '/admin' : '/profil/isveren'} className="px-6 py-3 border border-background-300 font-semibold text-sm rounded-xl text-center">
                 {isAdmin ? 'Admin Paneline Dön' : 'Profile Dön'}

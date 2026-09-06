@@ -74,8 +74,6 @@ export default function Navbar() {
   const profilePath =
     profile?.role === 'admin' ? '/admin' : profile?.role === 'employer' ? '/profil/isveren' : '/profil/aday';
 
-  const canPostJob = profile?.role === 'employer' || profile?.role === 'admin';
-
   const showVerificationWarning = profile?.role === 'employer' && profile.dogrulama_durumu !== 'verified';
 
   useEffect(() => {
@@ -185,7 +183,7 @@ export default function Navbar() {
                       <p className="text-sm font-medium text-foreground-950">{profile.full_name}</p>
                       <p className="text-xs text-foreground-500">
                         {profile.role === 'admin'
-                          ? 'Yönetici · İşveren yetkisi'
+                          ? 'Yönetici'
                           : profile.role === 'employer'
                             ? 'İşveren'
                             : 'Aday'}
@@ -199,7 +197,7 @@ export default function Navbar() {
                       <i className="ri-user-line text-base" />
                       {t('nav.profile')}
                     </Link>
-                    {(profile.role === 'employer' || profile.role === 'admin') && (
+                    {profile.role === 'employer' && (
                       <>
                         <Link
                           to="/ilanlarim"
@@ -214,8 +212,16 @@ export default function Navbar() {
                           onClick={() => setIsProfileMenuOpen(false)}
                           className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
                         >
-                          <i className="ri-add-circle-line text-base" />
-                          İlan Ekle
+                          <i className="ri-file-add-line text-base" />
+                          İlan Talebi
+                        </Link>
+                        <Link
+                          to="/paketler"
+                          onClick={() => setIsProfileMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                        >
+                          <i className="ri-price-tag-3-line text-base" />
+                          Paketler
                         </Link>
                       </>
                     )}
@@ -240,14 +246,24 @@ export default function Navbar() {
                       </>
                     )}
                     {profile.role === 'admin' && (
-                      <Link
-                        to="/admin"
-                        onClick={() => setIsProfileMenuOpen(false)}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
-                      >
-                        <i className="ri-admin-line text-base" />
-                        {t('nav.admin')}
-                      </Link>
+                      <>
+                        <Link
+                          to="/admin"
+                          onClick={() => setIsProfileMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                        >
+                          <i className="ri-admin-line text-base" />
+                          {t('nav.admin')}
+                        </Link>
+                        <Link
+                          to="/ilan-ekle"
+                          onClick={() => setIsProfileMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                        >
+                          <i className="ri-add-circle-line text-base" />
+                          Site İlanı Yayınla
+                        </Link>
+                      </>
                     )}
                     <hr className="my-1 border-background-200" />
                     <button
@@ -261,14 +277,23 @@ export default function Navbar() {
                 )}
               </div>
 
-              {/* Post Job: işveren veya site yöneticisi */}
-              {canPostJob && (
+              {/* İşveren: talep · Admin: site ilanı (roller ayrı) */}
+              {profile.role === 'employer' && profile.dogrulama_durumu === 'verified' && (
+                <Link
+                  to="/ilan-ekle"
+                  className="hidden lg:inline-flex px-4 py-2 text-sm font-medium bg-accent-500 text-background-50 rounded-lg hover:bg-accent-600 transition-colors whitespace-nowrap"
+                >
+                  <i className="ri-file-add-line mr-1" />
+                  İlan Talebi
+                </Link>
+              )}
+              {profile.role === 'admin' && (
                 <Link
                   to="/ilan-ekle"
                   className="hidden lg:inline-flex px-4 py-2 text-sm font-medium bg-accent-500 text-background-50 rounded-lg hover:bg-accent-600 transition-colors whitespace-nowrap"
                 >
                   <i className="ri-add-line mr-1" />
-                  {t('nav.postJob')}
+                  Site İlanı
                 </Link>
               )}
             </>
@@ -341,7 +366,7 @@ export default function Navbar() {
                   <i className="ri-user-line mr-2" />
                   {t('nav.profile')}
                 </Link>
-                {(profile.role === 'employer' || profile.role === 'admin') && (
+                {(profile.role === 'employer') && (
                   <>
                     <Link
                       to="/ilanlarim"
@@ -356,8 +381,16 @@ export default function Navbar() {
                       onClick={() => setIsMobileMenuOpen(false)}
                       className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
                     >
-                      <i className="ri-add-circle-line mr-2" />
-                      İlan Ekle
+                      <i className="ri-file-add-line mr-2" />
+                      İlan Talebi
+                    </Link>
+                    <Link
+                      to="/paketler"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                    >
+                      <i className="ri-price-tag-3-line mr-2" />
+                      Paketler
                     </Link>
                   </>
                 )}
@@ -382,14 +415,24 @@ export default function Navbar() {
                   </>
                 )}
                 {profile.role === 'admin' && (
-                  <Link
-                    to="/admin"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
-                  >
-                    <i className="ri-admin-line mr-2" />
-                    {t('nav.admin')}
-                  </Link>
+                  <>
+                    <Link
+                      to="/admin"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                    >
+                      <i className="ri-admin-line mr-2" />
+                      {t('nav.admin')}
+                    </Link>
+                    <Link
+                      to="/ilan-ekle"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                    >
+                      <i className="ri-add-circle-line mr-2" />
+                      Site İlanı Yayınla
+                    </Link>
+                  </>
                 )}
                 <button
                   onClick={() => { handleSignOut(); setIsMobileMenuOpen(false); }}
@@ -417,7 +460,7 @@ export default function Navbar() {
                 </Link>
               </>
             )}
-            {(canPostJob || !user) && (
+            {!user && (
             <Link
               to="/ilan-ekle"
               onClick={() => setIsMobileMenuOpen(false)}
@@ -425,6 +468,26 @@ export default function Navbar() {
             >
               <i className="ri-add-line mr-1" />
               {t('nav.postJob')}
+            </Link>
+            )}
+            {profile?.role === 'employer' && profile.dogrulama_durumu === 'verified' && (
+            <Link
+              to="/ilan-ekle"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="px-3 py-2.5 rounded-lg text-sm font-medium bg-accent-500 text-background-50 text-center hover:bg-accent-600 transition-colors"
+            >
+              <i className="ri-file-add-line mr-1" />
+              İlan Talebi
+            </Link>
+            )}
+            {profile?.role === 'admin' && (
+            <Link
+              to="/ilan-ekle"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="px-3 py-2.5 rounded-lg text-sm font-medium bg-accent-500 text-background-50 text-center hover:bg-accent-600 transition-colors"
+            >
+              <i className="ri-add-line mr-1" />
+              Site İlanı
             </Link>
             )}
           </div>

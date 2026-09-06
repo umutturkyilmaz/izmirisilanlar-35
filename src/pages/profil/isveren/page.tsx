@@ -395,7 +395,7 @@ export default function EmployerProfilePage() {
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-12">
         <div className="px-4 md:px-6 lg:px-8 max-w-5xl mx-auto">
 
-          {/* Admin: doğrulama gerekmez — işveren yetkisiyle ilan verebilir */}
+          {/* Admin: yalnızca yönetici — işveren ile karıştırılmaz */}
           {isAdminUser ? (
             <div className="rounded-xl border border-primary-200 bg-primary-50/60 p-4 md:p-5 mb-6">
               <div className="flex items-start gap-3">
@@ -404,10 +404,10 @@ export default function EmployerProfilePage() {
                 </div>
                 <div>
                   <h3 className="font-heading font-semibold text-sm md:text-base text-primary-900">
-                    Yönetici · İşveren yetkisi
+                    Yönetici paneli
                   </h3>
                   <p className="text-xs md:text-sm text-primary-800/80 mt-1">
-                    Paket ve kimlik onayı gerekmez. İlanlar doğrudan yayına alınır.
+                    Site ilanlarını doğrudan yayınlayabilirsiniz. İşveren ilanları ayrı onay sürecindedir.
                   </p>
                 </div>
               </div>

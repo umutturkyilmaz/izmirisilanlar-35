@@ -887,7 +887,7 @@ app.post('/api/jobs', auth, async (req, res) => {
   if (!['employer', 'admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'İşveren gerekli' });
   }
-  // Admin = site sahibi: doğrulama / paket onayı gerekmez, doğrudan yayınlayabilir
+  // Admin ≠ işveren: admin doğrulama/paket olmadan yayınlar; işveren yalnızca pending talep
   if (req.user.role === 'employer' && req.user.dogrulama_durumu !== 'verified') {
     return res.status(403).json({ error: 'İşveren hesabı henüz doğrulanmadı' });
   }
