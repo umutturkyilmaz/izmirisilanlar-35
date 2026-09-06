@@ -488,9 +488,9 @@ export default function JobDetailPage() {
                         {jobTypeLabels[sJob.job_type] || sJob.job_type}
                       </span>
                     </div>
-                    {sJob.salary_min && sJob.salary_max && (
+                    {(sJob.salary_type === 'asgari' || (sJob.salary_min && sJob.salary_max) || sJob.salary_min) && (
                       <p className="text-sm font-semibold text-primary-600 dark:text-primary-400">
-                        {sJob.salary_min.toLocaleString('tr-TR')} - {sJob.salary_max.toLocaleString('tr-TR')} TL
+                        {formatSalary(sJob.salary_min, sJob.salary_max, sJob.salary_type)}
                       </p>
                     )}
                   </Link>
