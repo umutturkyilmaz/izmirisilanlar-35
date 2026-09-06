@@ -9,27 +9,19 @@ import {
   fetchCredits,
   type EmployerCredit,
 } from '@/lib/credits';
+import {
+  JOB_TYPE_OPTIONS,
+  EXPERIENCE_OPTIONS,
+  EDUCATION_OPTIONS,
+  SALARY_TYPE_OPTIONS,
+  parseSalaryInput,
+} from '@/lib/jobLabels';
 
 interface JobCategory {
   id: number;
   name: string;
   icon: string;
 }
-
-const JOB_TYPES = [
-  { value: 'tam-zamanli', label: 'Tam Zamanlı' },
-  { value: 'yari-zamanli', label: 'Yarı Zamanlı' },
-  { value: 'staj', label: 'Staj' },
-  { value: 'uzaktan', label: 'Uzaktan' },
-  { value: 'freelance', label: 'Freelance' },
-];
-
-const EXPERIENCE_LEVELS = [
-  { value: 'junior', label: 'Junior (0-2 Yıl)' },
-  { value: 'mid', label: 'Mid-Level (2-5 Yıl)' },
-  { value: 'senior', label: 'Senior (5+ Yıl)' },
-  { value: 'her-seviye', label: 'Her Seviye' },
-];
 
 export default function PostJobPage() {
   const { user, profile, loading } = useAuth();
@@ -52,6 +44,8 @@ export default function PostJobPage() {
     city: '',
     job_type: 'tam-zamanli' as string,
     experience_level: 'her-seviye' as string,
+    education_level: 'farketmez' as string,
+    salary_type: 'range' as string,
     salary_min: '' as string,
     salary_max: '' as string,
   });
@@ -141,11 +135,15 @@ export default function PostJobPage() {
     if (!formData.job_type) errors.job_type = 'Çalışma tipi seçmelisiniz';
     if (!formData.experience_level) errors.experience_level = 'Deneyim seviyesi seçmelisiniz';
     if (!selectedCreditId) errors.credit = 'Yayınlamak için paket hakkı seçmelisiniz';
-    const salaryMin = parseInt(formData.salary_min, 10);
-    const salaryMax = parseInt(formData.salary_max, 10);
-    if (formData.salary_min && isNaN(salaryMin)) errors.salary_min = 'Geçerli bir sayı giriniz';
-    if (formData.salary_max && isNaN(salaryMax)) errors.salary_max = 'Geçerli bir sayı giriniz';
-    if (salaryMin && salaryMax && salaryMin > salaryMax) errors.salary_max = 'Maksimum maaş minimumdan düşük olamaz';
+    const salaryMin = parseSalaryInput(formData.salary_min);
+    const salaryMax = parseSalaryInput(formData.salary_max);
+    if (formData.salary_type === 'range') {
+      if (formData.salary_min && salaryMin == null) errors.salary_min = 'Geçerli bir maaş giriniz (örn. 28075)';
+      if (formData.salary_max && salaryMax == null) errors.salary_max = 'Geçerli bir maaş giriniz';
+      if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
+        errors.salary_max = 'Maksimum maaş minimumdan düşük olamaz';
+      }
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -180,8 +178,12 @@ export default function PostJobPage() {
           city: formData.city.trim() || null,
           job_type: formData.job_type || null,
           experience_level: formData.experience_level || null,
-          salary_min: formData.salary_min ? parseInt(formData.salary_min, 10) : null,
-          salary_max: formData.salary_max ? parseInt(formData.salary_max, 10) : null,
+          education_level: formData.education_level || null,
+          salary_type: formData.salary_type || 'range',
+          salary_min:
+            formData.salary_type === 'range' ? parseSalaryInput(formData.salary_min) : null,
+          salary_max:
+            formData.salary_type === 'range' ? parseSalaryInput(formData.salary_max) : null,
           requirements: filteredRequirements.length > 0 ? filteredRequirements : null,
           benefits: filteredBenefits.length > 0 ? filteredBenefits : null,
           image_url: imageUrl,
@@ -365,25 +367,69 @@ export default function PostJobPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Çalışma Tipi</label>
                   <select value={formData.job_type} onChange={(e) => updateField('job_type', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm">
-                    {JOB_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    {JOB_TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Deneyim</label>
+                  <select value={formData.experience_level} onChange={(e) => updateField('experience_level', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm">
+                    {EXPERIENCE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Öğrenim durumu</label>
+                  <select value={formData.education_level} onChange={(e) => updateField('education_level', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm">
+                    {EDUCATION_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Deneyim</label>
-                <select value={formData.experience_level} onChange={(e) => updateField('experience_level', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm">
-                  {EXPERIENCE_LEVELS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                <label className="block text-sm font-medium mb-1.5">Maaş bilgisi</label>
+                <select
+                  value={formData.salary_type}
+                  onChange={(e) => updateField('salary_type', e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm mb-3"
+                >
+                  {SALARY_TYPE_OPTIONS.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
                 </select>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1.5">Min Maaş</label>
-                  <input type="number" value={formData.salary_min} onChange={(e) => updateField('salary_min', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1.5">Max Maaş</label>
-                  <input type="number" value={formData.salary_max} onChange={(e) => updateField('salary_max', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm" />
-                </div>
+                {formData.salary_type === 'range' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Min Maaş (TL)</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="Örn: 28075"
+                        value={formData.salary_min}
+                        onChange={(e) => updateField('salary_min', e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                      />
+                      {formErrors.salary_min && <p className="text-xs text-red-600 mt-1">{formErrors.salary_min}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">Max Maaş (TL)</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="Örn: 35000"
+                        value={formData.salary_max}
+                        onChange={(e) => updateField('salary_max', e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                      />
+                      {formErrors.salary_max && <p className="text-xs text-red-600 mt-1">{formErrors.salary_max}</p>}
+                    </div>
+                    <p className="sm:col-span-2 text-xs text-foreground-500">
+                      Binlik ayırıcı kullanmayın veya TR formatı yazın (28.075 / 28075). Kuruş yuvarlanır.
+                    </p>
+                  </div>
+                )}
+                {formData.salary_type === 'asgari' && (
+                  <p className="text-sm text-foreground-600">İlanda &quot;Asgari Ücret&quot; olarak görünecek.</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1.5">Açıklama</label>

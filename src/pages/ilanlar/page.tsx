@@ -4,6 +4,7 @@ import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { api } from '@/lib/api';
 import JobImage from '@/components/feature/JobImage';
+import { EXPERIENCE_LABELS, formatSalary } from '@/lib/jobLabels';
 import DocumentHead from '@/components/feature/DocumentHead';
 import { jobPath } from '@/lib/jobPath';
 
@@ -16,6 +17,8 @@ interface Job {
   sector: string;
   job_type: string;
   experience_level: string;
+  salary_type?: string | null;
+  salary_type?: string | null;
   salary_min: number | null;
   salary_max: number | null;
   description: string;
@@ -458,15 +461,13 @@ export default function JobListingsPage() {
                             </span>
                             {job.experience_level && (
                               <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${EXPERIENCE_COLORS[job.experience_level] || EXPERIENCE_COLORS['her-seviye']}`}>
-                                {job.experience_level === 'her-seviye' ? 'Her Seviye' :
-                                 job.experience_level === 'junior' ? 'Junior' :
-                                 job.experience_level === 'mid' ? 'Mid' : 'Senior'}
+                                {EXPERIENCE_LABELS[job.experience_level] || job.experience_level}
                               </span>
                             )}
-                            {job.salary_min && job.salary_max && (
+                            {(job.salary_type === 'asgari' || job.salary_min || job.salary_max) && (
                               <span className="flex items-center gap-1 font-medium text-foreground-700">
                                 <i className="ri-coins-line text-foreground-400" />
-                                {job.salary_min.toLocaleString('tr-TR')} - {job.salary_max.toLocaleString('tr-TR')} TL
+                                {formatSalary(job.salary_min, job.salary_max, job.salary_type)}
                               </span>
                             )}
                           </div>

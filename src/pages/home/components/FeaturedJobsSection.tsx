@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
 import JobImage from '@/components/feature/JobImage';
 import { jobPath } from '@/lib/jobPath';
+import { EXPERIENCE_LABELS, formatSalary } from '@/lib/jobLabels';
 
 interface Job {
   id: string;
@@ -13,6 +14,7 @@ interface Job {
   city: string;
   job_type: string;
   experience_level: string;
+  salary_type?: string | null;
   salary_min: number | null;
   salary_max: number | null;
   image_url: string | null;
@@ -138,12 +140,12 @@ export default function FeaturedJobsSection() {
                         </span>
                         <span className="flex items-center gap-1">
                           <i className="ri-briefcase-line" />
-                          {job.experience_level}
+                          {EXPERIENCE_LABELS[job.experience_level] || job.experience_level}
                         </span>
-                        {job.salary_min && job.salary_max && (
+                        {(job.salary_type === 'asgari' || job.salary_min || job.salary_max) && (
                           <span className="flex items-center gap-1">
                             <i className="ri-coins-line" />
-                            {job.salary_min.toLocaleString('tr-TR')} - {job.salary_max.toLocaleString('tr-TR')} TL
+                            {formatSalary(job.salary_min, job.salary_max, job.salary_type)}
                           </span>
                         )}
                       </div>

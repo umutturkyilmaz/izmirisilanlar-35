@@ -91,6 +91,8 @@ async function ensureSchema() {
     `ALTER TABLE jobs ADD COLUMN slug VARCHAR(191) NULL`,
     `ALTER TABLE jobs ADD UNIQUE INDEX uq_jobs_slug (slug)`,
     `ALTER TABLE users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 1`,
+    `ALTER TABLE jobs ADD COLUMN education_level VARCHAR(64) NULL`,
+    `ALTER TABLE jobs ADD COLUMN salary_type VARCHAR(32) NULL DEFAULT 'range'`,
   ]) {
     try {
       await pool.query(sql);
@@ -859,10 +861,10 @@ app.post('/api/jobs', auth, async (req, res) => {
     await conn.query(
       `INSERT INTO jobs
       (id, employer_id, title, category_id, sector, description, company_name, city, job_type, experience_level,
-       salary_min, salary_max, requirements, benefits, image_url, status, featured, expires_at, credit_id, slug)
+       education_level, salary_type, salary_min, salary_max, requirements, benefits, image_url, status, featured, expires_at, credit_id, slug)
       VALUES
       (:id, :employer_id, :title, :category_id, :sector, :description, :company_name, :city, :job_type, :experience_level,
-       :salary_min, :salary_max, :requirements, :benefits, :image_url, :status, :featured, :expires_at, :credit_id, :slug)`,
+       :education_level, :salary_type, :salary_min, :salary_max, :requirements, :benefits, :image_url, :status, :featured, :expires_at, :credit_id, :slug)`,
       {
         id,
         employer_id: req.user.id,
@@ -874,8 +876,10 @@ app.post('/api/jobs', auth, async (req, res) => {
         city: b.city || null,
         job_type: b.job_type || null,
         experience_level: b.experience_level || null,
-        salary_min: b.salary_min ?? null,
-        salary_max: b.salary_max ?? null,
+        education_level: b.education_level || null,
+        salary_type: b.salary_type || 'range',
+        salary_min: b.salary_type === 'asgari' || b.salary_type === 'gizli' ? null : b.salary_min ?? null,
+        salary_max: b.salary_type === 'asgari' || b.salary_type === 'gizli' ? null : b.salary_max ?? null,
         requirements: b.requirements ? JSON.stringify(b.requirements) : null,
         benefits: b.benefits ? JSON.stringify(b.benefits) : null,
         image_url: b.image_url || null,
@@ -912,9 +916,11 @@ app.patch('/api/jobs/:id', auth, async (req, res) => {
     'city',
     'salary_min',
     'salary_max',
+    'salary_type',
     'sector',
     'job_type',
     'experience_level',
+    'education_level',
     'company_name',
     'image_url',
     'requirements',
@@ -942,6 +948,13 @@ app.patch('/api/jobs/:id', auth, async (req, res) => {
       }
       params[key] = v;
     }
+  }
+  const salaryType = req.body.salary_type !== undefined ? req.body.salary_type : job.salary_type;
+  if (salaryType === 'asgari' || salaryType === 'gizli') {
+    if (!sets.some((s) => s.startsWith('salary_min'))) sets.push('salary_min = :salary_min');
+    if (!sets.some((s) => s.startsWith('salary_max'))) sets.push('salary_max = :salary_max');
+    params.salary_min = null;
+    params.salary_max = null;
   }
   // İşveren kendi ilanını kapatabilir
   if (!isAdmin && req.body.status === 'closed') {

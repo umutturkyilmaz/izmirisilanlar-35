@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import JobImage from '@/components/feature/JobImage';
 import { ASSETS } from '@/lib/assets';
-import { EXPERIENCE_LABELS, formatSalary } from '@/lib/jobLabels';
+import { EXPERIENCE_LABELS, EDUCATION_LABELS, formatSalary } from '@/lib/jobLabels';
 import { checkRateLimit } from '@/lib/rateLimit';
 import DocumentHead from '@/components/feature/DocumentHead';
 import { jobPath } from '@/lib/jobPath';
@@ -20,6 +20,8 @@ interface Job {
   sector: string;
   job_type: string;
   experience_level: string;
+  education_level?: string | null;
+  salary_type?: string | null;
   salary_min: number | null;
   salary_max: number | null;
   description: string;
@@ -40,6 +42,7 @@ interface SimilarJob {
   city: string;
   sector: string;
   job_type: string;
+  salary_type?: string | null;
   salary_min: number | null;
   salary_max: number | null;
   created_at: string;
@@ -312,8 +315,12 @@ export default function JobDetailPage() {
                   {EXPERIENCE_LABELS[job.experience_level] || job.experience_level || 'Belirtilmedi'}
                 </span>
                 <span className="flex items-center gap-1.5">
+                  <i className="ri-graduation-cap-line text-primary-500" />
+                  {EDUCATION_LABELS[job.education_level || ''] || job.education_level || 'Öğrenim belirtilmedi'}
+                </span>
+                <span className="flex items-center gap-1.5">
                   <i className="ri-coins-line text-primary-500" />
-                  {formatSalary(job.salary_min, job.salary_max)}
+                  {formatSalary(job.salary_min, job.salary_max, job.salary_type)}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <i className="ri-time-line text-primary-500" />

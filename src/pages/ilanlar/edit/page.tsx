@@ -6,7 +6,7 @@ import JobImage from '@/components/feature/JobImage';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { uploadUserFile } from '@/lib/storage';
-import { EXPERIENCE_OPTIONS, JOB_TYPE_OPTIONS } from '@/lib/jobLabels';
+import { EXPERIENCE_OPTIONS, JOB_TYPE_OPTIONS, EDUCATION_OPTIONS, SALARY_TYPE_OPTIONS, parseSalaryInput } from '@/lib/jobLabels';
 
 const STATUSES = [
   { value: 'active', label: 'Yayında' },
@@ -27,6 +27,8 @@ type JobEdit = {
   sector: string | null;
   job_type: string | null;
   experience_level: string | null;
+  education_level?: string | null;
+  salary_type?: string | null;
   salary_min: number | null;
   salary_max: number | null;
   status: string;
@@ -55,6 +57,8 @@ export default function EditJobPage() {
     sector: '',
     job_type: 'tam-zamanli',
     experience_level: 'her-seviye',
+    education_level: 'farketmez',
+    salary_type: 'range',
     salary_min: '',
     salary_max: '',
     status: 'active',
@@ -93,6 +97,8 @@ export default function EditJobPage() {
           sector: data.sector || '',
           job_type: data.job_type || 'tam-zamanli',
           experience_level: data.experience_level || 'her-seviye',
+          education_level: data.education_level || 'farketmez',
+          salary_type: data.salary_type || (data.salary_min != null || data.salary_max != null ? 'range' : 'gizli'),
           salary_min: data.salary_min != null ? String(data.salary_min) : '',
           salary_max: data.salary_max != null ? String(data.salary_max) : '',
           status: data.status || 'active',
@@ -155,8 +161,10 @@ export default function EditJobPage() {
         sector: selected?.name || form.sector.trim() || null,
         job_type: form.job_type || null,
         experience_level: form.experience_level || null,
-        salary_min: form.salary_min ? parseInt(form.salary_min, 10) : null,
-        salary_max: form.salary_max ? parseInt(form.salary_max, 10) : null,
+        education_level: form.education_level || null,
+        salary_type: form.salary_type || 'range',
+        salary_min: form.salary_type === 'range' ? parseSalaryInput(form.salary_min) : null,
+        salary_max: form.salary_type === 'range' ? parseSalaryInput(form.salary_max) : null,
         image_url: nextImage,
         category_id: Number.isFinite(catId) && catId > 0 ? catId : null,
         requirements: requirements.map((r) => r.trim()).filter(Boolean),
@@ -300,25 +308,53 @@ export default function EditJobPage() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Öğrenim durumu</label>
+                  <select
+                    className={inputCls}
+                    value={form.education_level}
+                    onChange={(e) => setForm({ ...form, education_level: e.target.value })}
+                  >
+                    {EDUCATION_OPTIONS.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Maaş bilgisi</label>
+                <select
+                  className={inputCls}
+                  value={form.salary_type}
+                  onChange={(e) => setForm({ ...form, salary_type: e.target.value })}
+                >
+                  {SALARY_TYPE_OPTIONS.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+              {form.salary_type === 'range' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Min maaş</label>
+                  <label className="block text-sm font-medium mb-1.5">Min maaş (TL)</label>
                   <input
                     className={inputCls}
+                    placeholder="28075"
                     value={form.salary_min}
                     onChange={(e) => setForm({ ...form, salary_min: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Max maaş</label>
+                  <label className="block text-sm font-medium mb-1.5">Max maaş (TL)</label>
                   <input
                     className={inputCls}
+                    placeholder="35000"
                     value={form.salary_max}
                     onChange={(e) => setForm({ ...form, salary_max: e.target.value })}
                   />
                 </div>
               </div>
+              )}
               {isAdmin && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
