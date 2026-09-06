@@ -137,6 +137,36 @@ async function ensureSchema() {
   } catch (e) {
     console.warn('slug backfill', e.message);
   }
+  await cleanupSmokeTestUsers();
+}
+
+/** Smoke test hesaplarını temizle (ör. Smoke Ltd / smoke.*@example.com) */
+async function cleanupSmokeTestUsers() {
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, email, company_name FROM users
+       WHERE email LIKE 'smoke.%@example.com'
+          OR company_name = 'Smoke Ltd'
+          OR full_name IN ('Smoke Aday', 'Smoke İşveren')`,
+    );
+    if (!rows.length) return;
+    for (const u of rows) {
+      try {
+        await pool.query('DELETE FROM email_verifications WHERE user_id = ?', [u.id]);
+      } catch {
+        /* tablo yoksa */
+      }
+      try {
+        await pool.query('DELETE FROM password_resets WHERE user_id = ?', [u.id]);
+      } catch {
+        /* tablo yoksa */
+      }
+      await pool.query('DELETE FROM users WHERE id = ?', [u.id]);
+    }
+    console.log(`[cleanup] ${rows.length} smoke test kullanıcısı silindi:`, rows.map((r) => r.email).join(', '));
+  } catch (e) {
+    console.warn('smoke cleanup', e.message);
+  }
 }
 
 const app = express();
@@ -1572,6 +1602,26 @@ app.patch('/api/admin/users/:id', auth, async (req, res) => {
   if (role) {
     await pool.query(`UPDATE users SET role = :role WHERE id = :id`, { role, id: req.params.id });
   }
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/users/:id', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  if (req.params.id === req.user.id) {
+    return res.status(400).json({ error: 'Kendi hesabınızı silemezsiniz' });
+  }
+  try {
+    await pool.query('DELETE FROM email_verifications WHERE user_id = ?', [req.params.id]);
+  } catch {
+    /* ignore */
+  }
+  try {
+    await pool.query('DELETE FROM password_resets WHERE user_id = ?', [req.params.id]);
+  } catch {
+    /* ignore */
+  }
+  const [r] = await pool.query('DELETE FROM users WHERE id = ?', [req.params.id]);
+  if (!r.affectedRows) return res.status(404).json({ error: 'Kullanıcı yok' });
   res.json({ ok: true });
 });
 
