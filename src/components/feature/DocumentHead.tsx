@@ -35,7 +35,7 @@ function setJsonLd(id: string, data: object | null) {
   if (!el) {
     el = document.createElement('script');
     el.id = sid;
-    el.type = 'application/ld+json';
+    (el as HTMLScriptElement).type = 'application/ld+json';
     document.head.appendChild(el);
   }
   el.textContent = JSON.stringify(data);

@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import GoogleSignInButton from '@/components/feature/GoogleSignInButton';
+import DocumentHead from '@/components/feature/DocumentHead';
 import { useAuth } from '@/hooks/useAuth';
 import { ASSETS } from '@/lib/assets';
 import { GOOGLE_CLIENT_ID } from '@/lib/site';
@@ -12,11 +13,22 @@ import { homeForRole } from '@/lib/redirect';
 export default function LoginPage() {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
+  const location = useLocation();
   const { signIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const afterLogin = (role?: string) => {
+    const from = (location.state as { from?: string } | null)?.from;
+    if (from && typeof from === 'string' && from.startsWith('/')) {
+      navigate(from, { replace: true });
+      return;
+    }
+    navigate(homeForRole(role), { replace: true });
+  };
 
   const handleGoogle = useCallback(
     async (credential: string) => {
@@ -24,10 +36,11 @@ export default function LoginPage() {
       setIsLoading(true);
       const result = await signInWithGoogle(credential);
       setIsLoading(false);
-      if (result.success) navigate(homeForRole(result.profile?.role));
+      if (result.success) afterLogin(result.profile?.role);
       else setError(result.error || 'Google girişi başarısız');
     },
-    [navigate, signInWithGoogle],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [navigate, signInWithGoogle, location.state],
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,11 +48,11 @@ export default function LoginPage() {
     setError('');
     setIsLoading(true);
 
-    const result = await signIn(email, password);
+    const result = await signIn(email, password, remember);
     setIsLoading(false);
 
     if (result.success) {
-      navigate(homeForRole(result.profile?.role));
+      afterLogin(result.profile?.role);
     } else {
       setError(result.error || 'Giriş yapılamadı, lütfen bilgilerinizi kontrol edin.');
     }
@@ -47,6 +60,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <DocumentHead title="Giriş Yap" description="İzmir İş İlanları 35 hesabınıza giriş yapın." path="/giris" />
       <Navbar />
       <main className="flex-1 flex items-center justify-center px-4 py-12 md:py-20">
         <div className="w-full max-w-md">
@@ -112,6 +126,8 @@ export default function LoginPage() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
                     className="w-4 h-4 rounded border-background-300 text-primary-500 focus:ring-primary-400"
                   />
                   <span className="text-xs text-foreground-600">Beni hatırla</span>

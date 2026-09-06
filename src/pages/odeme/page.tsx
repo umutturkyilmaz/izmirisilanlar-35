@@ -91,27 +91,20 @@ export default function CheckoutPage() {
         return;
       }
 
-      await createNotification({
-        userId: user.id,
-        title: 'Paket hakkınız tanımlandı',
-        body: `${selected.name} paketi için yayınlama hakkınız eklendi.`,
-        link: '/ilan-ekle',
-      });
+      if (result.mode === 'pending_admin') {
+        await createNotification({
+          userId: user.id,
+          title: 'Paket talebi alındı',
+          body: `${selected.name} talebiniz admin onayına iletildi.`,
+          link: '/profil/isveren',
+        });
+        navigate(
+          `/odeme/basarili?paket=${selected.id}&payment=${result.payment_id}&pending=1`,
+        );
+        return;
+      }
 
-      const orderToken = `ok_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      sessionStorage.setItem(
-        'last_order_ok',
-        JSON.stringify({
-          token: orderToken,
-          packageId: selected.id,
-          packageName: selected.name,
-          amount: selected.price,
-          paymentId: result.payment_id,
-          createdAt: new Date().toISOString(),
-        }),
-      );
-
-      navigate(`/odeme/basarili?paket=${selected.id}&t=${orderToken}&payment=${result.payment_id}`);
+      navigate(`/odeme/basarili?paket=${selected.id}&payment=${result.payment_id}`);
     } catch (err) {
       setErrors({
         auth: err instanceof Error ? err.message : 'Sipariş tamamlanamadı',
@@ -226,7 +219,7 @@ export default function CheckoutPage() {
                     <p className="text-xs text-foreground-600 mt-0.5">
                       {iyzicoOn
                         ? '3D Secure ile iyzico Checkout Form’a yönlendirileceksiniz.'
-                        : 'iyzico anahtarları henüz yok — test modunda hak anında tanımlanır (kart çekilmez).'}
+                        : 'Online ödeme yakında (iyzico onayı sonrası). Şimdilik talebiniz admin onayına düşer; ücretsiz hak tanımlanmaz.'}
                     </p>
                   </div>
                 </div>
@@ -264,7 +257,7 @@ export default function CheckoutPage() {
                     ? 'İşleniyor...'
                     : iyzicoOn
                       ? `${formatPrice(selected.price)} — iyzico ile Öde`
-                      : `${formatPrice(selected.price)} — Test Siparişi Tamamla`}
+                      : `${formatPrice(selected.price)} — Admin Onayına Gönder`}
                 </button>
               </div>
             </form>

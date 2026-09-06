@@ -17,6 +17,8 @@ export interface Profile {
   dogrulama_talebi_tarihi: string | null;
   dogrulanma_tarihi: string | null;
   email_verified?: boolean;
+  education_level?: string | null;
+  experience_level?: string | null;
   created_at?: string | null;
 }
 
@@ -26,7 +28,11 @@ interface AuthState {
   profile: Profile | null;
   loading: boolean;
   error: string | null;
-  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string; profile?: Profile }>;
+  signIn: (
+    email: string,
+    password: string,
+    remember?: boolean,
+  ) => Promise<{ success: boolean; error?: string; profile?: Profile }>;
   signUp: (data: {
     email: string;
     password: string;
@@ -36,7 +42,7 @@ interface AuthState {
     city?: string;
     companyName?: string;
     vergiNumarasi?: string;
-  }) => Promise<{ success: boolean; error?: string }>;
+  }) => Promise<{ success: boolean; error?: string; profile?: Profile }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ success: boolean; error?: string }>;
@@ -84,13 +90,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [refreshProfile]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, remember = true) => {
     try {
       const data = await api<{ token: string; user: Profile; profile: Profile }>('/api/auth/login', {
         body: { email, password },
         auth: false,
       });
-      setToken(data.token);
+      setToken(data.token, remember);
       setUser(data.user);
       setProfile(data.profile);
       setSession({ access_token: data.token });
@@ -124,11 +130,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
         auth: false,
       });
-      setToken(res.token);
+      setToken(res.token, true);
       setUser(res.user);
       setProfile(res.profile);
       setSession({ access_token: res.token });
-      return { success: true };
+      return { success: true, profile: res.profile };
     } catch (e) {
       return { success: false, error: e instanceof Error ? e.message : 'Kayıt başarısız' };
     }

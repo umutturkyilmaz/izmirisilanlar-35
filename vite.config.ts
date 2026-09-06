@@ -64,7 +64,7 @@ export default defineConfig({
   ],
   base,
   build: {
-    sourcemap: true,
+    sourcemap: process.env.NODE_ENV !== 'production',
     outDir: "out",
     chunkSizeWarningLimit: 900,
     rollupOptions: {

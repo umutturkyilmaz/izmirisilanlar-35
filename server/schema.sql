@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url TEXT NULL,
   bio TEXT NULL,
   cv_url TEXT NULL,
+  google_id VARCHAR(128) NULL,
+  email_verified TINYINT(1) NOT NULL DEFAULT 0,
+  education_level VARCHAR(64) NULL,
+  experience_level VARCHAR(64) NULL,
   vergi_numarasi VARCHAR(64) NULL,
   dogrulama_durumu ENUM('unverified','pending','verified','rejected') NOT NULL DEFAULT 'unverified',
   dogrulama_talebi_tarihi DATETIME NULL,
@@ -43,6 +47,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   city VARCHAR(128) NULL,
   job_type VARCHAR(64) NULL,
   experience_level VARCHAR(64) NULL,
+  education_level VARCHAR(64) NULL,
+  salary_type VARCHAR(32) NULL DEFAULT 'range',
   salary_min INT NULL,
   salary_max INT NULL,
   requirements JSON NULL,
@@ -51,6 +57,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   status ENUM('pending','active','rejected','closed','expired') NOT NULL DEFAULT 'pending',
   featured TINYINT(1) NOT NULL DEFAULT 0,
   expires_at DATETIME NULL,
+  credit_id CHAR(36) NULL,
+  slug VARCHAR(191) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NULL,
   CONSTRAINT fk_jobs_employer FOREIGN KEY (employer_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -58,7 +66,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   INDEX idx_jobs_status (status),
   INDEX idx_jobs_employer (employer_id),
   INDEX idx_jobs_featured (featured),
-  INDEX idx_jobs_created (created_at)
+  INDEX idx_jobs_created (created_at),
+  UNIQUE KEY uq_jobs_slug (slug)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ========== 4/9 applications ==========

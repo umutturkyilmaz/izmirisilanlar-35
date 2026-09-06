@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { uploadUserFile } from '@/lib/storage';
 import { openAuthedFile } from '@/lib/files';
 import { jobPath } from '@/lib/jobPath';
+import { EDUCATION_OPTIONS, EXPERIENCE_OPTIONS } from '@/lib/jobLabels';
 
 interface Application {
   id: string;
@@ -34,6 +35,7 @@ export default function CandidateProfilePage() {
   const [tab, setTab] = useState<'profile' | 'applications'>(
     location.pathname.includes('basvurularim') ? 'applications' : 'profile',
   );
+  const [appsError, setAppsError] = useState<string | null>(null);
   const [pwdForm, setPwdForm] = useState({ current: '', next: '' });
   const [pwdMsg, setPwdMsg] = useState('');
   const [verifyMsg, setVerifyMsg] = useState('');
@@ -74,6 +76,8 @@ export default function CandidateProfilePage() {
     phone: '',
     city: '',
     bio: '',
+    education_level: '',
+    experience_level: '',
   });
 
   useEffect(() => {
@@ -83,6 +87,8 @@ export default function CandidateProfilePage() {
         phone: profile.phone || '',
         city: profile.city || '',
         bio: profile.bio || '',
+        education_level: profile.education_level || '',
+        experience_level: profile.experience_level || '',
       });
     }
   }, [profile]);
@@ -91,6 +97,7 @@ export default function CandidateProfilePage() {
     if (!user) return;
     const fetchApplications = async () => {
       setAppsLoading(true);
+      setAppsError(null);
       try {
         const data = await api<Application[]>('/api/applications/mine');
         setApplications(
@@ -102,8 +109,9 @@ export default function CandidateProfilePage() {
             sector: row.sector || '',
           })),
         );
-      } catch {
-        // silent fail
+      } catch (err) {
+        setAppsError(err instanceof Error ? err.message : 'Başvurular yüklenemedi');
+        setApplications([]);
       } finally {
         setAppsLoading(false);
       }
@@ -305,6 +313,38 @@ export default function CandidateProfilePage() {
                     placeholder="Kendinizden kısaca bahsedin..."
                   />
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Öğrenim</label>
+                    <select
+                      value={form.education_level}
+                      onChange={(e) => setForm({ ...form, education_level: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-background-100 border border-background-200 text-sm"
+                    >
+                      <option value="">Seçiniz</option>
+                      {EDUCATION_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Deneyim</label>
+                    <select
+                      value={form.experience_level}
+                      onChange={(e) => setForm({ ...form, experience_level: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bg-background-100 border border-background-200 text-sm"
+                    >
+                      <option value="">Seçiniz</option>
+                      {EXPERIENCE_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-background-200 pt-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground-700 mb-1.5">Mevcut şifre</label>
@@ -449,6 +489,11 @@ export default function CandidateProfilePage() {
             </div>
           ) : (
             <div className="space-y-4">
+              {appsError && (
+                <div className="mb-4 p-3 rounded-xl border border-amber-200 bg-amber-50 text-sm text-amber-800">
+                  {appsError}
+                </div>
+              )}
               {appsLoading ? (
                 <div className="text-center py-8 text-sm text-foreground-500 animate-pulse">Başvurularınız yükleniyor...</div>
               ) : applications.length === 0 ? (

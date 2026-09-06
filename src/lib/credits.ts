@@ -41,13 +41,10 @@ export async function consumeCredit(
   userIdOrCreditId: string,
   creditId?: string,
 ): Promise<(EmployerCredit & { durationDays: number }) | null> {
-  const id = creditId || userIdOrCreditId;
-  try {
-    const c = await api<EmployerCredit>(`/api/credits/${id}/consume`, { method: 'POST', body: {} });
-    return { ...c, durationDays: c.duration_days };
-  } catch {
-    return null;
-  }
+  // Sunucu kredi tüketimini yalnızca ilan oluşturma/yenileme ile yapar
+  void userIdOrCreditId;
+  void creditId;
+  return null;
 }
 
 export async function addCreditsFromPackage(
@@ -65,9 +62,8 @@ export async function addCreditsFromPackage(
 ) {
   const pkg = getPackageById(packageId);
   if (!pkg) throw new Error('Paket bulunamadı');
-  const creditsCount = packageId === 'kurumsal' ? 5 : 1;
   return api<{
-    mode: 'test' | 'iyzico';
+    mode: 'pending_admin' | 'iyzico' | 'test';
     payment_id: string;
     credit_id?: string;
     paymentPageUrl?: string;
@@ -76,12 +72,6 @@ export async function addCreditsFromPackage(
   }>('/api/payments/checkout', {
     body: {
       package_id: pkg.id,
-      package_name: pkg.name,
-      amount: meta.amount || pkg.price,
-      duration_days: pkg.durationDays,
-      featured: packageId === 'one-cikan',
-      featured_count: packageId === 'kurumsal' ? 2 : packageId === 'one-cikan' ? 1 : 0,
-      credits_count: creditsCount,
       buyer_name: meta.buyerName,
       buyer_email: meta.buyerEmail,
       buyer_phone: meta.buyerPhone,

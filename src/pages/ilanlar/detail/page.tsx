@@ -89,12 +89,13 @@ export default function JobDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (!user || !id) return;
+    if (!user || !job?.id) return;
+    const jobId = job.id;
 
     const checkApplication = async () => {
       try {
         const apps = await api<{ job_id: string }[]>('/api/applications/mine');
-        if (apps.some((a) => a.job_id === id)) setAlreadyApplied(true);
+        if (apps.some((a) => a.job_id === jobId)) setAlreadyApplied(true);
       } catch {
         /* ignore */
       }
@@ -103,7 +104,7 @@ export default function JobDetailPage() {
     const checkFavorite = async () => {
       try {
         const favs = await api<{ id: string; job_id: string }[]>('/api/favorites');
-        const found = favs.find((f) => f.job_id === id);
+        const found = favs.find((f) => f.job_id === jobId);
         if (found) {
           setIsFavorited(true);
           setFavoriteId(found.id);
@@ -115,16 +116,16 @@ export default function JobDetailPage() {
 
     checkApplication();
     checkFavorite();
-  }, [user, id]);
+  }, [user, job?.id]);
 
   // Fetch similar jobs
   useEffect(() => {
-    if (!job || !id) return;
+    if (!job || !job.id) return;
     const fetchSimilar = async () => {
       setSimilarLoading(true);
       try {
         const all = await api<SimilarJob[]>(`/api/jobs?status=active&limit=50`, { auth: false });
-        const others = all.filter((j) => j.id !== id);
+        const others = all.filter((j) => j.id !== job.id);
         const bySector = others.filter((j) => j.sector === job.sector);
         const byCity = others.filter((j) => j.city === job.city);
         const seen = new Set<string>();
@@ -143,15 +144,19 @@ export default function JobDetailPage() {
       }
     };
     fetchSimilar();
-  }, [job, id]);
+  }, [job]);
 
   const handleApply = async () => {
-    if (!user || !id) return;
+    if (!user || !job?.id) return;
     if (!profile?.cv_url) {
       setApplyMsg('Başvurudan önce profilinize PDF CV yükleyin.');
       return;
     }
-    const rl = checkRateLimit(`apply_${user.id}_${id}`, 3, 60 * 60 * 1000);
+    if (profile.email_verified === false) {
+      setApplyMsg('Başvuru için önce e-posta adresinizi doğrulayın (Profil → Doğrulama).');
+      return;
+    }
+    const rl = checkRateLimit(`apply_${user.id}_${job.id}`, 3, 60 * 60 * 1000);
     if (!rl.ok) {
       setApplyMsg(`Çok fazla başvuru denemesi. ${rl.retryAfterSec} sn bekleyin.`);
       return;
@@ -162,7 +167,7 @@ export default function JobDetailPage() {
     try {
       await api('/api/applications', {
         body: {
-          job_id: id,
+          job_id: job.id,
           cover_letter: coverLetter || null,
           cv_url: profile.cv_url,
         },
@@ -179,7 +184,7 @@ export default function JobDetailPage() {
   };
 
   const handleToggleFavorite = async () => {
-    if (!user || !id) return;
+    if (!user || !job?.id) return;
     setTogglingFav(true);
 
     try {
@@ -188,12 +193,14 @@ export default function JobDetailPage() {
         setIsFavorited(false);
         setFavoriteId(null);
       } else {
-        const data = await api<{ id: string }>('/api/favorites', { body: { job_id: id } });
+        const created = await api<{ id: string }>('/api/favorites', {
+          body: { job_id: job.id },
+        });
         setIsFavorited(true);
-        setFavoriteId(data.id);
+        setFavoriteId(created.id);
       }
     } catch (err) {
-      setFavMsg(err instanceof Error ? err.message : 'Favori işlemi başarısız');
+      setFavMsg(err instanceof Error ? err.message : 'Favori güncellenemedi');
       setTimeout(() => setFavMsg(''), 3000);
     } finally {
       setTogglingFav(false);

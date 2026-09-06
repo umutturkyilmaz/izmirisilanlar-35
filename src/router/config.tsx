@@ -55,7 +55,14 @@ const routes: RouteObject[] = [
     ),
   },
   { path: "/paketler", element: <Packages /> },
-  { path: "/odeme", element: <Checkout /> },
+  {
+    path: "/odeme",
+    element: (
+      <RequireAuth roles={["employer", "admin"]}>
+        <Checkout />
+      </RequireAuth>
+    ),
+  },
   { path: "/odeme/basarili", element: <PaymentSuccess /> },
   { path: "/odeme/iptal", element: <PaymentCancel /> },
   { path: "/giris", element: <Login /> },

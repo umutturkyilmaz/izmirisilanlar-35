@@ -96,8 +96,8 @@ export default function RegisterPage() {
     setIsLoading(false);
 
     if (result.success) {
-      setSuccess('Hesabınız oluşturuldu! Giriş sayfasına yönlendiriliyorsunuz.');
-      setTimeout(() => navigate('/giris'), 2000);
+      setSuccess('Hesabınız oluşturuldu! Yönlendiriliyorsunuz...');
+      setTimeout(() => navigate(homeForRole(result.profile?.role || role)), 1200);
     } else {
       setError(result.error || 'Kayıt sırasında bir hata oluştu.');
     }
@@ -244,6 +244,7 @@ export default function RegisterPage() {
                       <input
                         type="text"
                         name="companyName"
+                        required={role === 'employer'}
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
                         placeholder="Şirket Adı"

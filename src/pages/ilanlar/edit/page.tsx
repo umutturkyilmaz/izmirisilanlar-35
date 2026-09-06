@@ -134,13 +134,21 @@ export default function EditJobPage() {
     e.preventDefault();
     if (!id || !user) return;
     const minDesc = isAdmin ? 1 : 50;
-    if (form.title.trim().length < 3) {
-      setMsg('Başlık en az 3 karakter olmalı.');
+    if (form.title.trim().length < 5) {
+      setMsg('Başlık en az 5 karakter olmalı.');
       return;
     }
     if (form.description.trim().length < minDesc) {
       setMsg(isAdmin ? 'Açıklama gerekli.' : 'Açıklama en az 50 karakter olmalı.');
       return;
+    }
+    if (form.salary_type === 'range') {
+      const sMin = parseSalaryInput(form.salary_min);
+      const sMax = parseSalaryInput(form.salary_max);
+      if (sMin != null && sMax != null && sMin > sMax) {
+        setMsg('Minimum maaş, maksimumdan büyük olamaz.');
+        return;
+      }
     }
     setSaving(true);
     setMsg(null);

@@ -1,11 +1,17 @@
 import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
+import DocumentHead from '@/components/feature/DocumentHead';
 import { JOB_PACKAGES, formatPrice } from '@/data/packages';
 
 export default function PackagesPage() {
   return (
     <div className="min-h-screen flex flex-col">
+      <DocumentHead
+        title="İlan Paketleri"
+        description="İşveren ilan paketleri. Online ödeme yakında; şimdilik talepler admin onayına düşer."
+        path="/paketler"
+      />
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <section className="px-4 md:px-6 lg:px-8 max-w-6xl mx-auto">
@@ -15,8 +21,8 @@ export default function PackagesPage() {
               İlan Yayınlama Paketleri
             </h1>
             <p className="text-foreground-600 leading-relaxed">
-              İzmir İş İlanları 35 üzerinden iş ilanı yayınlamak için aşağıdaki paketlerden birini
-              seçip güvenli ödeme ile satın alabilirsiniz. Adaylar için platform ücretsizdir.
+              İlan yayınlamak için paket talep edin. Online kart ödemesi (iyzico) onay sürecinde;
+              şu an talepleriniz admin onayına düşer. Adaylar için platform ücretsizdir.
             </p>
           </div>
 
@@ -71,7 +77,7 @@ export default function PackagesPage() {
                       : 'bg-foreground-950 hover:bg-foreground-800 text-background-50'
                   }`}
                 >
-                  Satın Al
+                  Satın Al / Talep Et
                 </Link>
               </article>
             ))}
@@ -79,8 +85,8 @@ export default function PackagesPage() {
 
           <div className="mt-12 md:mt-16 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
             {[
-              { icon: 'ri-shield-check-line', title: 'Güvenli Ödeme', text: 'iyzico altyapısı ile KVKK uyumlu tahsilat' },
-              { icon: 'ri-file-list-3-line', title: 'Dijital Hizmet', text: 'Satın alma sonrası ilan yayınlama hakkı tanımlanır' },
+              { icon: 'ri-shield-check-line', title: 'Admin Onayı', text: 'Paket talepleri admin tarafından incelenir; ücretsiz otomatik hak yok' },
+              { icon: 'ri-bank-card-line', title: 'Ödeme Yakında', text: 'iyzico entegrasyonu firma onayı sonrası açılacak' },
               { icon: 'ri-customer-service-2-line', title: 'Destek', text: 'Paket ve fatura sorularınız için iletişim hattı' },
             ].map((item) => (
               <div

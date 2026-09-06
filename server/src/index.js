@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
@@ -10,6 +11,7 @@ import crypto from 'crypto';
 import mysql from 'mysql2/promise';
 import { fileURLToPath } from 'url';
 import { isIyzicoReady, initializeCheckoutForm, retrieveCheckoutForm } from './iyzico.js';
+import { getServerPackage, packageCreditsMeta } from './packages.js';
 import {
   isMailReady,
   sendPasswordResetEmail,
@@ -21,6 +23,45 @@ import {
   sendEmailVerification,
 } from './mail.js';
 import { OAuth2Client } from 'google-auth-library';
+
+function logInfo(msg, extra = {}) {
+  console.log(JSON.stringify({ level: 'info', msg, t: new Date().toISOString(), ...extra }));
+}
+function logError(msg, extra = {}) {
+  console.error(JSON.stringify({ level: 'error', msg, t: new Date().toISOString(), ...extra }));
+}
+
+function buildCorsOrigins() {
+  const raw =
+    process.env.CORS_ORIGINS ||
+    process.env.PUBLIC_SITE_URL ||
+    'https://izmirisilanlari35.com,https://www.izmirisilanlari35.com,http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000';
+  const set = new Set(
+    String(raw)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  set.add('https://izmirisilanlari35.com');
+  set.add('https://www.izmirisilanlari35.com');
+  for (const o of [...set]) {
+    try {
+      const u = new URL(o);
+      if (u.hostname.startsWith('www.')) {
+        set.add(`${u.protocol}//${u.hostname.slice(4)}`);
+      } else if (!/^(localhost|127\.0\.0\.1)$/i.test(u.hostname)) {
+        set.add(`${u.protocol}//www.${u.hostname}`);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  set.add('http://localhost:5173');
+  set.add('http://127.0.0.1:5173');
+  set.add('http://localhost:3000');
+  set.add('http://127.0.0.1:3000');
+  return [...set];
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8080);
@@ -93,6 +134,8 @@ async function ensureSchema() {
     `ALTER TABLE users ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 1`,
     `ALTER TABLE jobs ADD COLUMN education_level VARCHAR(64) NULL`,
     `ALTER TABLE jobs ADD COLUMN salary_type VARCHAR(32) NULL DEFAULT 'range'`,
+    `ALTER TABLE users ADD COLUMN education_level VARCHAR(64) NULL`,
+    `ALTER TABLE users ADD COLUMN experience_level VARCHAR(64) NULL`,
   ]) {
     try {
       await pool.query(sql);
@@ -173,26 +216,32 @@ async function cleanupSmokeTestUsers() {
 
 const app = express();
 app.set('trust proxy', 1);
-const SITE_ORIGINS = (
-  process.env.CORS_ORIGINS ||
-  process.env.PUBLIC_SITE_URL ||
-  'https://izmirisilanlari35.com,http://localhost:5173,http://127.0.0.1:5173'
-)
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
+const SITE_ORIGINS = buildCorsOrigins();
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }),
+);
 app.use(
   cors({
     origin: (origin, cb) => {
-      if (!origin || SITE_ORIGINS.includes(origin) || process.env.NODE_ENV !== 'production') {
+      if (!origin || SITE_ORIGINS.includes(origin)) {
         return cb(null, true);
       }
-      return cb(null, SITE_ORIGINS.includes(origin));
+      if (process.env.NODE_ENV !== 'production') {
+        return cb(null, true);
+      }
+      return cb(null, false);
     },
     credentials: true,
   }),
 );
 app.use(express.json({ limit: '2mb' }));
+app.use((req, _res, next) => {
+  req.requestId = crypto.randomUUID().slice(0, 8);
+  next();
+});
 
 const ALLOWED_UPLOAD_MIME = new Set([
   'image/jpeg',
@@ -203,25 +252,31 @@ const ALLOWED_UPLOAD_MIME = new Set([
 ]);
 const ALLOWED_UPLOAD_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf']);
 
-/** Disk + MySQL: Railway redeploy disk siler; DB kalıcıdır. Private dosyalar /api/files üzerinden. */
+/** Disk: yalnızca public (DB is_private=0) veya DB kaydı olmayan görseller. PDF asla disk’ten açılmaz. */
 app.get('/uploads/:filename', async (req, res) => {
   const filename = path.basename(req.params.filename || '');
   if (!filename || filename.includes('..')) return res.status(400).end();
+  const ext = path.extname(filename).toLowerCase();
   try {
     const [rows] = await pool.query(
       'SELECT mime, data, is_private FROM uploaded_files WHERE id = :id LIMIT 1',
       { id: filename },
     );
-    if (rows[0]?.is_private) {
-      return res.status(401).json({ error: 'Bu dosya için yetkili indirme gerekli' });
-    }
-    if (rows[0]?.data) {
-      res.setHeader('Content-Type', rows[0].mime || 'application/octet-stream');
-      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      return res.send(rows[0].data);
+    if (rows[0]) {
+      if (rows[0].is_private) {
+        return res.status(401).json({ error: 'Bu dosya için yetkili indirme gerekli' });
+      }
+      if (rows[0].data) {
+        res.setHeader('Content-Type', rows[0].mime || 'application/octet-stream');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        return res.send(rows[0].data);
+      }
     }
   } catch (e) {
-    console.error('upload serve db', e.message);
+    logError('upload serve db', { error: e.message });
+  }
+  if (ext === '.pdf') {
+    return res.status(401).json({ error: 'Bu dosya için yetkili indirme gerekli' });
   }
   const fp = path.join(UPLOAD_DIR, filename);
   if (fs.existsSync(fp)) {
@@ -336,7 +391,8 @@ app.get('/api/health', async (_req, res) => {
       ok: true,
       db: true,
       mail: isMailReady(),
-      google: Boolean(GOOGLE_CLIENT_ID),
+      google: GOOGLE_AUTH_ENABLED && Boolean(GOOGLE_CLIENT_ID),
+      iyzico: isIyzicoReady(),
     });
   } catch (e) {
     res.status(503).json({ ok: false, db: false, error: e.message });
@@ -346,6 +402,14 @@ app.get('/api/health', async (_req, res) => {
 // ---- Auth ----
 app.post('/api/auth/register', async (req, res) => {
   try {
+    const ip = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip;
+    const rl = await checkRateLimitDb(`register:${ip}`, 10, 60 * 60 * 1000);
+    if (!rl.ok) {
+      return res.status(429).json({
+        error: 'Çok fazla kayıt denemesi. Bir süre sonra tekrar deneyin.',
+        retryAfterSec: rl.retryAfterSec,
+      });
+    }
     const {
       email,
       password,
@@ -361,6 +425,9 @@ app.post('/api/auth/register', async (req, res) => {
     }
     if (!['candidate', 'employer'].includes(role)) {
       return res.status(400).json({ error: 'Geçersiz rol' });
+    }
+    if (role === 'employer' && !String(company_name || '').trim()) {
+      return res.status(400).json({ error: 'İşveren kaydı için şirket / unvan gerekli' });
     }
     const id = uid();
     const hash = await bcrypt.hash(password, 10);
@@ -400,7 +467,8 @@ app.post('/api/auth/register', async (req, res) => {
     });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Bu e-posta kayıtlı' });
-    res.status(500).json({ error: e.message });
+    logError('register', { error: e.message });
+    res.status(500).json({ error: 'Kayıt tamamlanamadı' });
   }
 });
 
@@ -473,7 +541,18 @@ app.get('/api/auth/me', auth, (req, res) => {
 
 app.patch('/api/auth/profile', auth, async (req, res) => {
   try {
-    const allowed = ['full_name', 'company_name', 'phone', 'city', 'bio', 'avatar_url', 'cv_url', 'vergi_numarasi'];
+    const allowed = [
+      'full_name',
+      'company_name',
+      'phone',
+      'city',
+      'bio',
+      'avatar_url',
+      'cv_url',
+      'vergi_numarasi',
+      'education_level',
+      'experience_level',
+    ];
     const sets = [];
     const params = { id: req.user.id };
     for (const key of allowed) {
@@ -557,8 +636,8 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
 app.get('/api/auth/google/status', (_req, res) => {
   res.json({
-    enabled: Boolean(GOOGLE_CLIENT_ID),
-    clientId: GOOGLE_CLIENT_ID || null,
+    enabled: GOOGLE_AUTH_ENABLED && Boolean(GOOGLE_CLIENT_ID),
+    clientId: GOOGLE_AUTH_ENABLED ? GOOGLE_CLIENT_ID || null : null,
     note: GOOGLE_AUTH_ENABLED ? null : 'Google giriş kapalı (GOOGLE_AUTH_ENABLED)',
   });
 });
@@ -584,12 +663,16 @@ app.post('/api/auth/google', async (req, res) => {
     const avatar = payload.picture || null;
     const roleWanted = ['candidate', 'employer'].includes(req.body?.role) ? req.body.role : 'candidate';
 
-    let [rows] = await pool.query(
-      'SELECT * FROM users WHERE google_id = :g OR email = :e LIMIT 1',
-      { g: googleId, e: email },
-    );
-    let user = rows[0];
+    let [byGoogle] = await pool.query('SELECT * FROM users WHERE google_id = :g LIMIT 1', { g: googleId });
+    let user = byGoogle[0];
     if (!user) {
+      const [byEmail] = await pool.query('SELECT * FROM users WHERE email = :e LIMIT 1', { e: email });
+      if (byEmail[0]) {
+        return res.status(409).json({
+          error:
+            'Bu e-posta ile zaten hesap var. Önce e-posta/şifre ile giriş yapın; Google bağlama desteklenmiyor.',
+        });
+      }
       const id = uid();
       const hash = await bcrypt.hash(crypto.randomUUID(), 10);
       let companyName = null;
@@ -598,14 +681,17 @@ app.post('/api/auth/google', async (req, res) => {
       if (roleWanted === 'employer') {
         companyName = String(req.body?.company_name || req.body?.companyName || '').trim() || null;
         vergi = String(req.body?.vergi_numarasi || req.body?.vergiNumarasi || '').replace(/\D/g, '');
+        if (!companyName) {
+          return res.status(400).json({ error: 'İşveren Google kaydı için şirket adı gerekli' });
+        }
         if (!vergi || vergi.length !== 10) {
           return res.status(400).json({ error: 'İşveren Google kaydı için 10 haneli vergi numarası gerekli' });
         }
         dogrulama = 'pending';
       }
       await pool.query(
-        `INSERT INTO users (id, email, password_hash, role, full_name, avatar_url, google_id, company_name, vergi_numarasi, dogrulama_durumu)
-         VALUES (:id, :email, :hash, :role, :full_name, :avatar, :google_id, :company_name, :vergi, :dogrulama)`,
+        `INSERT INTO users (id, email, password_hash, role, full_name, avatar_url, google_id, company_name, vergi_numarasi, dogrulama_durumu, email_verified)
+         VALUES (:id, :email, :hash, :role, :full_name, :avatar, :google_id, :company_name, :vergi, :dogrulama, 1)`,
         {
           id,
           email,
@@ -619,21 +705,13 @@ app.post('/api/auth/google', async (req, res) => {
           dogrulama,
         },
       );
-      [rows] = await pool.query('SELECT * FROM users WHERE id = :id', { id });
-      user = rows[0];
-    } else if (!user.google_id) {
-      await pool.query('UPDATE users SET google_id = :g, avatar_url = COALESCE(avatar_url, :a) WHERE id = :id', {
-        g: googleId,
-        a: avatar,
-        id: user.id,
-      });
-      [rows] = await pool.query('SELECT * FROM users WHERE id = :id', { id: user.id });
+      const [rows] = await pool.query('SELECT * FROM users WHERE id = :id', { id });
       user = rows[0];
     }
     const token = signUser(user);
     res.json({ token, user: profileRow(user), profile: profileRow(user) });
   } catch (e) {
-    console.error('google auth', e.message);
+    logError('google auth', { error: e.message });
     res.status(401).json({ error: 'Google girişi başarısız' });
   }
 });
@@ -883,7 +961,7 @@ app.post('/api/jobs', auth, async (req, res) => {
         requirements: b.requirements ? JSON.stringify(b.requirements) : null,
         benefits: b.benefits ? JSON.stringify(b.benefits) : null,
         image_url: b.image_url || null,
-        status: isAdmin ? b.status || 'active' : b.status || 'pending',
+        status: isAdmin ? b.status || 'active' : 'pending',
         featured: featured ? 1 : 0,
         expires_at: expiresAt,
         credit_id: usedCreditId,
@@ -1013,8 +1091,8 @@ app.post('/api/jobs/:id/renew', auth, async (req, res) => {
     });
     const expires = new Date(Date.now() + (credit.duration_days || 7) * 24 * 60 * 60 * 1000);
     await conn.query(
-      `UPDATE jobs SET status = 'active', featured = :featured, expires_at = :exp WHERE id = :id`,
-      { featured: credit.featured ? 1 : 0, exp: expires, id: job.id },
+      `UPDATE jobs SET status = 'pending', featured = :featured, expires_at = :exp, credit_id = :cid WHERE id = :id`,
+      { featured: credit.featured ? 1 : 0, exp: expires, cid: credit.id, id: job.id },
     );
     await conn.commit();
     const [next] = await pool.query('SELECT * FROM jobs WHERE id = :id', { id: job.id });
@@ -1097,7 +1175,9 @@ app.post('/api/applications', auth, async (req, res) => {
   try {
     const { job_id, cover_letter, cv_url } = req.body || {};
     if (!job_id) return res.status(400).json({ error: 'İlan gerekli' });
-    const [jobs] = await pool.query('SELECT * FROM jobs WHERE id = :id LIMIT 1', { id: job_id });
+    const [jobs] = await pool.query('SELECT * FROM jobs WHERE id = :id OR slug = :id LIMIT 1', {
+      id: job_id,
+    });
     const job = jobs[0];
     if (!job || job.status !== 'active') {
       return res.status(400).json({ error: 'Bu ilana başvuru yapılamaz' });
@@ -1111,7 +1191,7 @@ app.post('/api/applications', auth, async (req, res) => {
        VALUES (:id, :job_id, :candidate_id, :cover_letter, :cv_url, 'pending')`,
       {
         id,
-        job_id,
+        job_id: job.id,
         candidate_id: req.user.id,
         cover_letter: cover_letter || null,
         cv_url: cv_url || null,
@@ -1226,17 +1306,25 @@ app.get('/api/favorites', auth, async (req, res) => {
 });
 
 app.post('/api/favorites', auth, async (req, res) => {
+  const rawJobId = req.body?.job_id;
+  if (!rawJobId) return res.status(400).json({ error: 'job_id gerekli' });
+  const [jobs] = await pool.query(
+    `SELECT id FROM jobs WHERE (id = :id OR slug = :id) AND status = 'active' LIMIT 1`,
+    { id: rawJobId },
+  );
+  const job = jobs[0];
+  if (!job) return res.status(400).json({ error: 'Favoriye eklenecek aktif ilan yok' });
   const id = uid();
   try {
     await pool.query(`INSERT INTO favorites (id, user_id, job_id) VALUES (:id, :user_id, :job_id)`, {
       id,
       user_id: req.user.id,
-      job_id: req.body.job_id,
+      job_id: job.id,
     });
     res.status(201).json({ id });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Zaten favoride' });
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Favori eklenemedi' });
   }
 });
 
@@ -1263,12 +1351,13 @@ app.get('/api/payments/iyzico/status', (_req, res) => {
     sandbox: process.env.IYZICO_SANDBOX !== 'false',
     message: isIyzicoReady()
       ? 'iyzico hazır (Checkout Form)'
-      : 'iyzico kapalı — API anahtarları bekleniyor; test modunda kredi anında tanımlanır',
+      : 'iyzico kapalı — paket talepleri admin onayına düşer; ücretsiz kredi yok',
   });
 });
 
-async function grantCreditsForPayment(payment, meta) {
-  const [existing] = await pool.query(
+async function grantCreditsForPayment(connOrPool, payment, meta) {
+  const db = connOrPool || pool;
+  const [existing] = await db.query(
     `SELECT id FROM employer_credits WHERE payment_id = :pid LIMIT 1`,
     { pid: payment.id },
   );
@@ -1281,7 +1370,7 @@ async function grantCreditsForPayment(payment, meta) {
   for (let i = 0; i < count; i++) {
     const creditId = uid();
     const isFeatured = i < featuredCount;
-    await pool.query(
+    await db.query(
       `INSERT INTO employer_credits
       (id, employer_id, payment_id, package_id, package_name, duration_days, featured, remaining)
       VALUES
@@ -1301,36 +1390,84 @@ async function grantCreditsForPayment(payment, meta) {
   return firstId;
 }
 
+async function notifyEmployerPackage(employerId, title, body, link = '/ilan-ekle') {
+  const notifId = uid();
+  await pool.query(
+    `INSERT INTO notifications (id, user_id, title, body, link, \`read\`) VALUES (?, ?, ?, ?, ?, 0)`,
+    [notifId, employerId, title, body, link],
+  );
+}
+
 app.post('/api/payments/checkout', auth, async (req, res) => {
   try {
     if (!['employer', 'admin'].includes(req.user.role)) {
       return res.status(403).json({ error: 'Paket yalnızca işverenler için' });
     }
+    if (req.user.role === 'employer' && req.user.dogrulama_durumu !== 'verified') {
+      return res.status(403).json({
+        error: 'Paket talebi için önce işveren hesabınızın admin tarafından onaylanması gerekir',
+      });
+    }
+    const rl = await checkRateLimitDb(`checkout:${req.user.id}`, 8, 60 * 60 * 1000);
+    if (!rl.ok) {
+      return res.status(429).json({
+        error: 'Çok fazla ödeme denemesi. Bir süre sonra tekrar deneyin.',
+        retryAfterSec: rl.retryAfterSec,
+      });
+    }
+
     const b = req.body || {};
+    const pkg = getServerPackage(b.package_id);
+    if (!pkg) return res.status(400).json({ error: 'Geçersiz paket' });
+    const meta = packageCreditsMeta(pkg);
     const paymentId = uid();
-    const pkgId = b.package_id || '';
-    const creditsCount = pkgId === 'kurumsal' ? 5 : 1;
-    const featuredCount =
-      pkgId === 'kurumsal' ? 2 : pkgId === 'one-cikan' || Boolean(b.featured) ? creditsCount : 0;
-    const meta = {
-      duration_days: b.duration_days || 7,
-      featured: featuredCount > 0,
-      featured_count: featuredCount,
-      credits_count: creditsCount,
-    };
+
+    // iyzico yoksa: admin onaylı talep (ücretsiz kredi YOK)
+    if (!isIyzicoReady()) {
+      await pool.query(
+        `INSERT INTO job_payments
+        (id, employer_id, package_id, package_name, amount, currency, status, buyer_name, buyer_email, buyer_phone, company_name, tax_id, billing_address, credits_meta)
+        VALUES
+        (:id, :employer_id, :package_id, :package_name, :amount, 'TRY', 'pending_admin', :buyer_name, :buyer_email, :buyer_phone, :company_name, :tax_id, :billing_address, :credits_meta)`,
+        {
+          id: paymentId,
+          employer_id: req.user.id,
+          package_id: pkg.id,
+          package_name: pkg.name,
+          amount: pkg.price,
+          buyer_name: b.buyer_name || null,
+          buyer_email: b.buyer_email || null,
+          buyer_phone: b.buyer_phone || null,
+          company_name: b.company_name || null,
+          tax_id: b.tax_id || null,
+          billing_address: b.billing_address || null,
+          credits_meta: JSON.stringify(meta),
+        },
+      );
+      await notifyEmployerPackage(
+        req.user.id,
+        'Paket talebiniz alındı',
+        `${pkg.name} talebiniz admin onayına iletildi. Onaylanınca yayınlama hakkınız tanımlanacak.`,
+        '/profil/isveren',
+      );
+      return res.status(201).json({
+        mode: 'pending_admin',
+        payment_id: paymentId,
+        message: 'Paket talebiniz alındı. Admin onayından sonra hakkınız tanımlanacak.',
+      });
+    }
 
     await pool.query(
       `INSERT INTO job_payments
       (id, employer_id, package_id, package_name, amount, currency, status, buyer_name, buyer_email, buyer_phone, company_name, tax_id, billing_address, credits_meta)
       VALUES
-      (:id, :employer_id, :package_id, :package_name, :amount, 'TRY', :status, :buyer_name, :buyer_email, :buyer_phone, :company_name, :tax_id, :billing_address, :credits_meta)`,
+      (:id, :employer_id, :package_id, :package_name, :amount, 'TRY', 'pending_iyzico', :buyer_name, :buyer_email, :buyer_phone, :company_name, :tax_id, :billing_address, :credits_meta)`,
       {
         id: paymentId,
         employer_id: req.user.id,
-        package_id: b.package_id,
-        package_name: b.package_name,
-        amount: b.amount,
-        status: isIyzicoReady() ? 'pending_iyzico' : 'test_paid',
+        package_id: pkg.id,
+        package_name: pkg.name,
+        amount: pkg.price,
         buyer_name: b.buyer_name || null,
         buyer_email: b.buyer_email || null,
         buyer_phone: b.buyer_phone || null,
@@ -1341,41 +1478,22 @@ app.post('/api/payments/checkout', auth, async (req, res) => {
       },
     );
 
-    // Anahtar yoksa: test/geçiş modu — kredi hemen (iyzico gelince bu dal kapanır)
-    if (!isIyzicoReady()) {
-      const creditId = await grantCreditsForPayment(
-        {
-          id: paymentId,
-          employer_id: req.user.id,
-          package_id: b.package_id,
-          package_name: b.package_name,
-        },
-        meta,
-      );
-      await pool.query(`UPDATE job_payments SET status = 'test_paid' WHERE id = :id`, { id: paymentId });
-      return res.status(201).json({
-        mode: 'test',
-        payment_id: paymentId,
-        credit_id: creditId,
-        message: 'iyzico anahtarları yok — test modunda hak tanımlandı',
-      });
-    }
-
     const publicApi = (process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`).replace(
       /\/$/,
       '',
     );
-    const siteUrl = (process.env.PUBLIC_SITE_URL || process.env.VITE_PUBLIC_SITE_URL || 'https://izmirisilanlari35.com').replace(
-      /\/$/,
-      '',
-    );
+    const siteUrl = (
+      process.env.PUBLIC_SITE_URL ||
+      process.env.VITE_PUBLIC_SITE_URL ||
+      'https://izmirisilanlari35.com'
+    ).replace(/\/$/, '');
     const nameParts = String(b.buyer_name || 'Musteri').trim().split(/\s+/);
     const init = await initializeCheckoutForm({
       conversationId: paymentId,
       basketId: paymentId,
-      price: b.amount,
-      packageId: b.package_id,
-      packageName: b.package_name,
+      price: pkg.price,
+      packageId: pkg.id,
+      packageName: pkg.name,
       callbackUrl: `${publicApi}/api/payments/iyzico/callback`,
       buyer: {
         id: req.user.id,
@@ -1390,26 +1508,111 @@ app.post('/api/payments/checkout', auth, async (req, res) => {
       },
     });
 
-    await pool.query(
-      `UPDATE job_payments SET iyzico_token = :token, status = 'pending_iyzico' WHERE id = :id`,
-      { token: init.token, id: paymentId },
-    );
+    await pool.query(`UPDATE job_payments SET iyzico_token = :token WHERE id = :id`, {
+      token: init.token,
+      id: paymentId,
+    });
 
     res.status(201).json({
       mode: 'iyzico',
       payment_id: paymentId,
       token: init.token,
       paymentPageUrl: init.paymentPageUrl,
-      returnSiteUrl: `${siteUrl}/odeme/basarili?paket=${encodeURIComponent(b.package_id)}&payment=${paymentId}`,
+      returnSiteUrl: `${siteUrl}/odeme/basarili?paket=${encodeURIComponent(pkg.id)}&payment=${paymentId}`,
     });
   } catch (e) {
-    res.status(500).json({ error: e.message || 'Ödeme başlatılamadı' });
+    logError('checkout', { error: e.message });
+    res.status(500).json({ error: 'Ödeme başlatılamadı' });
   }
 });
 
-/** iyzico Checkout Form callback (POST token) */
+/** Admin: paket talebini onayla → kredi tanımla */
+app.post('/api/admin/payments/:id/approve', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.query(`SELECT * FROM job_payments WHERE id = :id LIMIT 1 FOR UPDATE`, {
+      id: req.params.id,
+    });
+    const payment = rows[0];
+    if (!payment) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Sipariş yok' });
+    }
+    if (!['pending_admin', 'pending_iyzico'].includes(payment.status)) {
+      await conn.rollback();
+      return res.status(400).json({ error: `Bu sipariş onaylanamaz (durum: ${payment.status})` });
+    }
+    let meta = packageCreditsMeta(getServerPackage(payment.package_id) || {
+      duration_days: 7,
+      credits_count: 1,
+      featured_count: 0,
+    });
+    try {
+      const parsed =
+        typeof payment.credits_meta === 'string'
+          ? JSON.parse(payment.credits_meta)
+          : payment.credits_meta;
+      if (parsed?.credits_count) meta = { ...meta, ...parsed };
+    } catch {
+      /* keep */
+    }
+    const catalog = getServerPackage(payment.package_id);
+    if (catalog) meta = packageCreditsMeta(catalog);
+
+    const [upd] = await conn.query(
+      `UPDATE job_payments SET status = 'admin_approved' WHERE id = :id AND status IN ('pending_admin','pending_iyzico')`,
+      { id: payment.id },
+    );
+    if (!upd.affectedRows) {
+      await conn.rollback();
+      return res.status(409).json({ error: 'Sipariş zaten işlenmiş' });
+    }
+    const creditId = await grantCreditsForPayment(conn, payment, meta);
+    await conn.commit();
+    await notifyEmployerPackage(
+      payment.employer_id,
+      'Paket onaylandı',
+      `${payment.package_name} paketiniz onaylandı. İlan yayınlama hakkınız tanımlandı.`,
+    );
+    res.json({ ok: true, credit_id: creditId, status: 'admin_approved' });
+  } catch (e) {
+    await conn.rollback();
+    logError('admin payment approve', { error: e.message });
+    res.status(500).json({ error: 'Onay başarısız' });
+  } finally {
+    conn.release();
+  }
+});
+
+app.post('/api/admin/payments/:id/reject', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const reason = String(req.body?.reason || '').trim().slice(0, 300);
+  const [rows] = await pool.query(`SELECT * FROM job_payments WHERE id = :id LIMIT 1`, {
+    id: req.params.id,
+  });
+  const payment = rows[0];
+  if (!payment) return res.status(404).json({ error: 'Sipariş yok' });
+  if (!['pending_admin', 'pending_iyzico'].includes(payment.status)) {
+    return res.status(400).json({ error: 'Bu sipariş reddedilemez' });
+  }
+  await pool.query(`UPDATE job_payments SET status = 'admin_rejected' WHERE id = :id`, {
+    id: payment.id,
+  });
+  await notifyEmployerPackage(
+    payment.employer_id,
+    'Paket talebi reddedildi',
+    reason || `${payment.package_name} talebiniz reddedildi. Detay için iletişime geçin.`,
+    '/paketler',
+  );
+  res.json({ ok: true, status: 'admin_rejected' });
+});
+
+/** iyzico Checkout Form callback (POST token) — idempotent + paidPrice kontrolü */
 app.post('/api/payments/iyzico/callback', express.urlencoded({ extended: true }), async (req, res) => {
   const siteUrl = (process.env.PUBLIC_SITE_URL || 'https://izmirisilanlari35.com').replace(/\/$/, '');
+  const conn = await pool.getConnection();
   try {
     const token = req.body?.token || req.query?.token;
     if (!token) {
@@ -1417,38 +1620,81 @@ app.post('/api/payments/iyzico/callback', express.urlencoded({ extended: true })
     }
     const result = await retrieveCheckoutForm(token);
     const paymentId = result.conversationId;
-    const [rows] = await pool.query(`SELECT * FROM job_payments WHERE id = :id LIMIT 1`, {
+    await conn.beginTransaction();
+    const [rows] = await conn.query(`SELECT * FROM job_payments WHERE id = :id LIMIT 1 FOR UPDATE`, {
       id: paymentId,
     });
     const payment = rows[0];
     if (!payment) {
+      await conn.rollback();
       return res.redirect(`${siteUrl}/odeme/iptal?reason=payment_not_found`);
     }
 
-    if (result.paymentStatus === 'SUCCESS' || result.status === 'success') {
-      let meta = { duration_days: 7, featured: false, credits_count: 1 };
-      try {
-        meta = typeof payment.credits_meta === 'string'
-          ? JSON.parse(payment.credits_meta)
-          : payment.credits_meta || meta;
-      } catch {
-        /* keep default */
-      }
-      await pool.query(
-        `UPDATE job_payments SET status = 'paid', iyzico_payment_id = :pid WHERE id = :id`,
-        { pid: result.paymentId || result.paymentIdList || token, id: paymentId },
-      );
-      await grantCreditsForPayment(payment, meta);
+    if (['paid', 'admin_approved'].includes(payment.status)) {
+      await conn.commit();
       return res.redirect(
         `${siteUrl}/odeme/basarili?paket=${encodeURIComponent(payment.package_id)}&payment=${paymentId}&ok=1`,
       );
     }
 
-    await pool.query(`UPDATE job_payments SET status = 'failed' WHERE id = :id`, { id: paymentId });
+    if (result.paymentStatus === 'SUCCESS' || result.status === 'success') {
+      const catalog = getServerPackage(payment.package_id);
+      const expected = Number(catalog?.price ?? payment.amount);
+      const paidRaw = result.paidPrice ?? result.price ?? expected;
+      const paid = Number(paidRaw);
+      if (!Number.isFinite(paid) || Math.abs(paid - expected) > 0.05) {
+        await conn.query(`UPDATE job_payments SET status = 'amount_mismatch' WHERE id = :id`, {
+          id: paymentId,
+        });
+        await conn.commit();
+        logError('iyzico amount mismatch', {
+          paymentId,
+          expected,
+          paid,
+        });
+        return res.redirect(`${siteUrl}/odeme/iptal?reason=amount_mismatch`);
+      }
+
+      let meta = packageCreditsMeta(
+        catalog || { duration_days: 7, credits_count: 1, featured_count: 0 },
+      );
+      try {
+        const parsed =
+          typeof payment.credits_meta === 'string'
+            ? JSON.parse(payment.credits_meta)
+            : payment.credits_meta;
+        if (parsed?.credits_count) meta = { ...meta, ...parsed };
+      } catch {
+        /* keep */
+      }
+      if (catalog) meta = packageCreditsMeta(catalog);
+
+      const [upd] = await conn.query(
+        `UPDATE job_payments SET status = 'paid', iyzico_payment_id = :pid WHERE id = :id AND status IN ('pending_iyzico','pending_admin')`,
+        { pid: String(result.paymentId || result.paymentIdList || token), id: paymentId },
+      );
+      if (upd.affectedRows) {
+        await grantCreditsForPayment(conn, payment, meta);
+      }
+      await conn.commit();
+      return res.redirect(
+        `${siteUrl}/odeme/basarili?paket=${encodeURIComponent(payment.package_id)}&payment=${paymentId}&ok=1`,
+      );
+    }
+
+    await conn.query(`UPDATE job_payments SET status = 'failed' WHERE id = :id`, { id: paymentId });
+    await conn.commit();
     return res.redirect(`${siteUrl}/odeme/iptal?reason=failed`);
   } catch (e) {
-    console.error('iyzico callback', e);
+    try {
+      await conn.rollback();
+    } catch {
+      /* ignore */
+    }
+    logError('iyzico callback', { error: e.message });
     return res.redirect(`${siteUrl}/odeme/iptal?reason=error`);
+  } finally {
+    conn.release();
   }
 });
 
@@ -1465,16 +1711,10 @@ app.get('/api/payments/:id', auth, async (req, res) => {
   res.json(rest);
 });
 
-app.post('/api/credits/:id/consume', auth, async (req, res) => {
-  const [rows] = await pool.query(
-    `SELECT * FROM employer_credits WHERE id = :id AND employer_id = :uid AND remaining > 0 LIMIT 1`,
-    { id: req.params.id, uid: req.user.id },
-  );
-  const c = rows[0];
-  if (!c) return res.status(404).json({ error: 'Kredi yok' });
-  await pool.query(`UPDATE employer_credits SET remaining = remaining - 1 WHERE id = :id`, { id: c.id });
-  const [next] = await pool.query(`SELECT * FROM employer_credits WHERE id = :id`, { id: c.id });
-  res.json({ ...next[0], featured: !!next[0].featured });
+app.post('/api/credits/:id/consume', auth, (_req, res) => {
+  res.status(403).json({
+    error: 'Kredi tüketimi yalnızca ilan yayınlama / yenileme ile yapılır',
+  });
 });
 
 app.get('/api/payments', auth, async (req, res) => {
@@ -1613,7 +1853,21 @@ app.patch('/api/admin/users/:id', auth, async (req, res) => {
     }
   }
   if (role) {
-    await pool.query(`UPDATE users SET role = :role WHERE id = :id`, { role, id: req.params.id });
+    // Admin rolü API üzerinden verilemez (yalnızca candidate ↔ employer)
+    if (!['candidate', 'employer'].includes(role)) {
+      return res.status(400).json({ error: 'Admin rolü yalnızca veritabanından atanabilir' });
+    }
+    if (req.params.id === req.user.id) {
+      return res.status(400).json({ error: 'Kendi rolünüzü değiştiremezsiniz' });
+    }
+    const [target] = await pool.query('SELECT role FROM users WHERE id = ? LIMIT 1', [req.params.id]);
+    if (target[0]?.role === 'admin') {
+      return res.status(400).json({ error: 'Admin kullanıcının rolü buradan değiştirilemez' });
+    }
+    await pool.query(`UPDATE users SET role = :role WHERE id = :id AND role <> 'admin'`, {
+      role,
+      id: req.params.id,
+    });
   }
   res.json({ ok: true });
 });
@@ -1696,7 +1950,8 @@ app.get('/api/admin/stats', auth, async (req, res) => {
     employers: e.c,
     candidates: c.c,
     mail: isMailReady(),
-    google: Boolean(GOOGLE_CLIENT_ID),
+    google: GOOGLE_AUTH_ENABLED && Boolean(GOOGLE_CLIENT_ID),
+    iyzico: isIyzicoReady(),
   });
 });
 
@@ -1715,13 +1970,30 @@ app.post('/api/jobs/expire', async (req, res) => {
   res.json({ updated: r.affectedRows || 0 });
 });
 
+app.use((err, req, res, _next) => {
+  logError('unhandled', {
+    requestId: req.requestId,
+    path: req.path,
+    error: err?.message,
+  });
+  if (res.headersSent) return;
+  res.status(err.status || 500).json({
+    error: process.env.NODE_ENV === 'production' ? 'Sunucu hatası' : err.message || 'Sunucu hatası',
+  });
+});
+
 ensureSchema()
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`API listening on :${PORT} mail=${isMailReady()} google=${Boolean(GOOGLE_CLIENT_ID)}`);
+      logInfo('API listening', {
+        port: PORT,
+        mail: isMailReady(),
+        google: GOOGLE_AUTH_ENABLED && Boolean(GOOGLE_CLIENT_ID),
+        iyzico: isIyzicoReady(),
+      });
     });
   })
   .catch((e) => {
-    console.error('FATAL: schema hazırlanamadı', e.message);
+    logError('FATAL schema', { error: e.message });
     process.exit(1);
   });

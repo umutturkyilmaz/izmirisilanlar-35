@@ -18,7 +18,7 @@ Tarayıcı MySQL’e doğrudan bağlanmaz.
    - `PUBLIC_API_URL` = API’nin public domain’i (Generate Domain sonrası)
 4. MySQL’e `server/schema.sql` çalıştır (Query / TablePlus / mysql client)
 5. API → Networking → **Generate Domain** → örn. `https://xxx.up.railway.app`
-6. **izmirisilanlar-35** (web) Variables:
+6. **izmirisilanlari35** (web) Variables:
    ```
    VITE_PUBLIC_API_URL=https://xxx.up.railway.app
    VITE_PUBLIC_SITE_URL=https://izmirisilanlari35.com
@@ -61,7 +61,7 @@ CONTACT_NOTIFY_TO=umutata355@gmail.com
 3. **Credentials → Create Credentials → OAuth client ID → Web application**  
    - Authorized JavaScript origins:
      - `https://izmirisilanlari35.com`
-     - `http://localhost:5173`
+     - `http://localhost:5173` ve `http://localhost:3000`
    - Authorized redirect URIs: (boş bırakılabilir; GIS popup için origin yeterli)
 4. Client ID’yi kopyala (ör. `123456789-xxx.apps.googleusercontent.com`)
 

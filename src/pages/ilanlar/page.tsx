@@ -18,7 +18,6 @@ interface Job {
   job_type: string;
   experience_level: string;
   salary_type?: string | null;
-  salary_type?: string | null;
   salary_min: number | null;
   salary_max: number | null;
   description: string;

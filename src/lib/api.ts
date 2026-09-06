@@ -6,19 +6,24 @@ export const isApiConfigured = Boolean(
 );
 
 const TOKEN_KEY = 'izmir_api_token';
+const REMEMBER_KEY = 'izmir_remember';
 
 export function getToken() {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
   } catch {
     return null;
   }
 }
 
-export function setToken(token: string | null) {
+export function setToken(token: string | null, remember = true) {
   try {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else localStorage.removeItem(TOKEN_KEY);
+    localStorage.setItem(REMEMBER_KEY, remember ? '1' : '0');
+    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    if (token) {
+      (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token);
+    }
   } catch {
     /* ignore */
   }
@@ -47,11 +52,16 @@ export async function api<T = unknown>(path: string, opts: Opts = {}): Promise<T
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(opts.body);
   }
-  const res = await fetch(`${API_URL}${path}`, {
-    method: opts.method || (opts.body || opts.formData ? 'POST' : 'GET'),
-    headers,
-    body,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method: opts.method || (opts.body || opts.formData ? 'POST' : 'GET'),
+      headers,
+      body,
+    });
+  } catch {
+    throw new Error('Sunucuya bağlanılamadı. Bağlantınızı kontrol edip tekrar deneyin.');
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error((data as { error?: string }).error || `HTTP ${res.status}`);

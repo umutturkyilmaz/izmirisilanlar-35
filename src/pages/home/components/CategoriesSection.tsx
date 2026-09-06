@@ -14,14 +14,15 @@ export default function CategoriesSection() {
   const { t } = useTranslation('common');
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const data = await api<Category[]>('/api/categories', { auth: false });
         if (data) setCategories(data);
-      } catch {
-        // silent fail, keep empty
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Kategoriler yüklenemedi');
       } finally {
         setLoading(false);
       }
@@ -47,6 +48,11 @@ export default function CategoriesSection() {
               <div key={i} className="bg-background-100 rounded-xl p-4 md:p-5 border border-background-200 h-28 animate-pulse" />
             ))}
           </div>
+        )}
+        {!loading && error && (
+          <p className="text-center text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            {error}
+          </p>
         )}
 
         {!loading && (

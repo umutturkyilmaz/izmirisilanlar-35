@@ -1,7 +1,7 @@
 # Railway Kurulum — Sıfırdan Adım Adım
 
 Bu rehber: **MySQL (boş)** + **API** + **Web sitesi** bağlantısı.  
-Kod GitHub'da hazır: `umutturkyilmaz/izmirisilanlar-35`
+Kod GitHub'da hazır: `umutturkyilmaz/izmirisilanlari35` (veya mevcut repo adınız)
 
 ---
 
@@ -68,7 +68,7 @@ Tablolardan biri görünmeli: `users`, `jobs`, `job_categories` …
 ### Yoksa — yeni API servisi
 
 1. Proje sayfasında **+ New** → **GitHub Repo**  
-2. Repo: `izmirisilanlar-35` (veya `umutturkyilmaz/izmirisilanlar-35`)  
+2. Repo: GitHub’daki gerçek repo adı (ör. `izmirisilanlari35`)  
 3. Servis oluşunca → **Settings**  
 4. **Root Directory** = `server` (önemli!)  
 5. **Save** → otomatik deploy başlar
@@ -119,15 +119,15 @@ Tablolardan biri görünmeli: `users`, `jobs`, `job_categories` …
 1. API servisi → **Settings** → **Networking**  
 2. **Generate Domain**  
 3. Çıkan adresi kopyala, örnek:  
-   `https://izmir-api-production-xxxx.up.railway.app`
+   `https://izmirisilanlari35api-production.up.railway.app`
+   (Railway’de kendi API domain’inizi kullanın)
 
-4. **Variables**'a geri dön → ekle:
-   ```
-   PUBLIC_API_URL=https://izmir-api-production-xxxx.up.railway.app
-   ```
+3. API `PUBLIC_API_URL` örneği:
+   PUBLIC_API_URL=https://izmirisilanlari35api-production.up.railway.app
+   CORS_ORIGINS=https://izmirisilanlari35.com,https://www.izmirisilanlari35.com
    (sonunda `/` olmasın)
 
-5. Tekrar deploy bitsin.
+4. Tekrar deploy bitsin.
 
 ### API sağlık testi
 

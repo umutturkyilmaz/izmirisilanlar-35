@@ -25,6 +25,7 @@ export default function FavoritesPage() {
   const { user, loading } = useAuth();
   const [favorites, setFavorites] = useState<FavoriteJob[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -33,11 +34,13 @@ export default function FavoritesPage() {
     }
     const fetchFavorites = async () => {
       setDataLoading(true);
+      setError(null);
       try {
         const data = await api<FavoriteJob[]>('/api/favorites');
         setFavorites(data || []);
-      } catch {
-        // silent
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Favoriler yüklenemedi');
+        setFavorites([]);
       } finally {
         setDataLoading(false);
       }
@@ -49,8 +52,8 @@ export default function FavoritesPage() {
     try {
       await api(`/api/favorites/${favoriteId}`, { method: 'DELETE' });
       setFavorites((prev) => prev.filter((f) => f.id !== favoriteId));
-    } catch {
-      // silent
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Favori silinemedi');
     }
   };
 
@@ -103,6 +106,9 @@ export default function FavoritesPage() {
             <p className="text-sm text-foreground-500 mt-1">{favorites.length} favori ilan</p>
           </div>
 
+          {error && (
+            <div className="mb-4 p-4 rounded-xl border border-amber-200 bg-amber-50 text-sm text-amber-800">{error}</div>
+          )}
           {dataLoading ? (
             <div className="text-center py-12 text-sm text-foreground-500 animate-pulse">Favorileriniz yükleniyor...</div>
           ) : favorites.length === 0 ? (
