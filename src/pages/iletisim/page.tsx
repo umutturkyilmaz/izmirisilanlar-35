@@ -1,5 +1,6 @@
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
+import DocumentHead from '@/components/feature/DocumentHead';
 import { CONTACT, FEEDBACK_WHATSAPP, whatsappUrl } from '@/lib/site';
 
 export default function ContactPage() {
@@ -14,6 +15,11 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <DocumentHead
+        title="İletişim"
+        description="İzmir İş İlanları 35 iletişim — WhatsApp destek hattı."
+        path="/iletisim"
+      />
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <div className="px-4 md:px-6 lg:px-8 max-w-3xl mx-auto">

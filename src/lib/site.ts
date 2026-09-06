@@ -5,11 +5,11 @@ export const SOCIAL_LINKS = {
   linkedin: (import.meta.env.VITE_SOCIAL_LINKEDIN || '').trim(),
 } as const;
 
-/** Google giriş kapalı. Açmak: VITE_GOOGLE_AUTH_ENABLED=true + VITE_GOOGLE_CLIENT_ID */
+/** Google Sign-In — VITE_GOOGLE_CLIENT_ID doluysa açık; kapatmak: VITE_GOOGLE_AUTH_ENABLED=false */
 export const GOOGLE_CLIENT_ID =
-  import.meta.env.VITE_GOOGLE_AUTH_ENABLED === 'true'
-    ? (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim()
-    : '';
+  import.meta.env.VITE_GOOGLE_AUTH_ENABLED === 'false'
+    ? ''
+    : (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
 
 /** Sitede görünen iletişim — WhatsApp odaklı */
 export const CONTACT = {

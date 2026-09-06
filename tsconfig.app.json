@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "incremental": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "ES2022",
     "useDefineForClassFields": true,
@@ -27,11 +28,9 @@
     "noImplicitThis": false,
     "useUnknownInCatchVariables": false,
     "alwaysStrict": false,
-    "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": false,
-    "noUncheckedSideEffectImports": false,
     "paths": {
-      "@/*": ["./src/*"],
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src", "vite-env.d.ts"]

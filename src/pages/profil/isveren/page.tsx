@@ -4,6 +4,7 @@ import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
+import DocumentHead from '@/components/feature/DocumentHead';
 import ApplicationsSection from '@/pages/profil/isveren/components/ApplicationsSection';
 import { fetchCredits } from '@/lib/credits';
 import { downloadInvoicePdf } from '@/lib/invoice';
@@ -53,6 +54,7 @@ export default function EmployerProfilePage() {
   const [requestingVerification, setRequestingVerification] = useState(false);
   const [verificationMsg, setVerificationMsg] = useState('');
   const [jobActionMsg, setJobActionMsg] = useState('');
+  const [jobsError, setJobsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (location.pathname.includes('ilanlarim')) setTab('jobs');
@@ -84,6 +86,7 @@ export default function EmployerProfilePage() {
     if (!user) return;
     const fetchMyJobs = async () => {
       setJobsLoading(true);
+      setJobsError(null);
       try {
         const [jobs, apps] = await Promise.all([
           api<Omit<JobListing, 'application_count'>[]>(`/api/jobs?employer_id=${user.id}`),
@@ -99,8 +102,9 @@ export default function EmployerProfilePage() {
             application_count: countByJob[job.id] || 0,
           })),
         );
-      } catch {
-        // silent
+      } catch (err) {
+        setJobsError(err instanceof Error ? err.message : 'İlanlar yüklenemedi');
+        setMyJobs([]);
       } finally {
         setJobsLoading(false);
       }
@@ -123,8 +127,8 @@ export default function EmployerProfilePage() {
           })),
       );
       setShowApplicationsModal(true);
-    } catch {
-      // silent
+    } catch (err) {
+      setJobActionMsg(err instanceof Error ? err.message : 'Başvurular yüklenemedi');
     } finally {
       setAppsLoading(false);
     }
@@ -204,8 +208,8 @@ export default function EmployerProfilePage() {
       setSelectedJobApplications((prev) =>
         prev.map((a) => (a.id === applicationId ? { ...a, status: newStatus } : a))
       );
-    } catch {
-      // silent
+    } catch (err) {
+      setJobActionMsg(err instanceof Error ? err.message : 'Başvuru durumu güncellenemedi');
     }
   };
 
@@ -391,6 +395,7 @@ export default function EmployerProfilePage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <DocumentHead title="İşveren Profili" path="/profil/isveren" />
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-12">
         <div className="px-4 md:px-6 lg:px-8 max-w-5xl mx-auto">
@@ -720,6 +725,11 @@ export default function EmployerProfilePage() {
                   Son fatura PDF
                 </button>
               </div>
+              {jobsError && (
+                <div className="mb-4 p-3 rounded-xl border border-amber-200 bg-amber-50 text-sm text-amber-800">
+                  {jobsError}
+                </div>
+              )}
               {jobsLoading ? (
                 <div className="text-center py-8 text-sm text-foreground-500 animate-pulse">İlanlarınız yükleniyor...</div>
               ) : myJobs.length === 0 ? (

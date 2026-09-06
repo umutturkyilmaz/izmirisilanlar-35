@@ -2,15 +2,18 @@ import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
+import DocumentHead from '@/components/feature/DocumentHead';
 
 type LegalProps = {
   title: string;
+  path: string;
   children: ReactNode;
 };
 
-function LegalLayout({ title, children }: LegalProps) {
+function LegalLayout({ title, path, children }: LegalProps) {
   return (
     <div className="min-h-screen flex flex-col">
+      <DocumentHead title={title} description={`${title} — İzmir İş İlanları 35`} path={path} />
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <article className="px-4 md:px-6 lg:px-8 max-w-3xl mx-auto">
@@ -35,7 +38,7 @@ function LegalLayout({ title, children }: LegalProps) {
 
 export function KvkkPage() {
   return (
-    <LegalLayout title="KVKK Aydınlatma Metni">
+    <LegalLayout title="KVKK Aydınlatma Metni" path="/kvkk">
       <p>
         İzmir İş İlanları 35 (“Platform”) olarak 6698 sayılı Kişisel Verilerin Korunması Kanunu
         kapsamında veri sorumlusu sıfatıyla kişisel verilerinizi aşağıda açıklanan amaçlarla işleriz.
@@ -66,7 +69,7 @@ export function KvkkPage() {
 
 export function PrivacyPage() {
   return (
-    <LegalLayout title="Gizlilik Politikası">
+    <LegalLayout title="Gizlilik Politikası" path="/gizlilik">
       <p>
         Bu politika, Platform’u kullanırken toplanan bilgilerin nasıl korunduğunu açıklar. Adaylar
         için hizmet ücretsizdir; işverenler dijital ilan yayınlama hizmeti satın alır.
@@ -87,7 +90,7 @@ export function PrivacyPage() {
 
 export function DistanceSalesPage() {
   return (
-    <LegalLayout title="Mesafeli Satış Sözleşmesi">
+    <LegalLayout title="Mesafeli Satış Sözleşmesi" path="/mesafeli-satis">
       <p>
         Bu sözleşme, Platform üzerinden satılan dijital hizmet (iş ilanı yayınlama paketleri)
         için geçerlidir. Satıcı: İzmir İş İlanları 35 işletmesi. Alıcı: paket satın alan işveren.

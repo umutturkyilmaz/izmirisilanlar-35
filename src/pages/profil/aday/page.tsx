@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
+import DocumentHead from '@/components/feature/DocumentHead';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { uploadUserFile } from '@/lib/storage';
@@ -212,6 +213,7 @@ export default function CandidateProfilePage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <DocumentHead title="Aday Profili" path="/profil/aday" />
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-12">
         <div className="px-4 md:px-6 lg:px-8 max-w-4xl mx-auto">

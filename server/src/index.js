@@ -12,6 +12,7 @@ import mysql from 'mysql2/promise';
 import { fileURLToPath } from 'url';
 import { isIyzicoReady, initializeCheckoutForm, retrieveCheckoutForm } from './iyzico.js';
 import { getServerPackage, packageCreditsMeta } from './packages.js';
+import { assertUploadContent, publicError } from './security.js';
 import {
   isMailReady,
   sendPasswordResetEmail,
@@ -67,9 +68,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8080);
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-change-me';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
-/** Google giriş kapalı; açmak için GOOGLE_AUTH_ENABLED=true + GOOGLE_CLIENT_ID */
-const GOOGLE_AUTH_ENABLED = process.env.GOOGLE_AUTH_ENABLED === 'true';
-const GOOGLE_CLIENT_ID = GOOGLE_AUTH_ENABLED ? process.env.GOOGLE_CLIENT_ID || '' : '';
+/** Google: CLIENT_ID varsa açık; kapatmak için GOOGLE_AUTH_ENABLED=false */
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_AUTH_ENABLED =
+  process.env.GOOGLE_AUTH_ENABLED !== 'false' && Boolean(GOOGLE_CLIENT_ID);
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 function makeJobSlug(title, id) {
@@ -136,6 +138,7 @@ async function ensureSchema() {
     `ALTER TABLE jobs ADD COLUMN salary_type VARCHAR(32) NULL DEFAULT 'range'`,
     `ALTER TABLE users ADD COLUMN education_level VARCHAR(64) NULL`,
     `ALTER TABLE users ADD COLUMN experience_level VARCHAR(64) NULL`,
+    `ALTER TABLE users ADD COLUMN token_version INT NOT NULL DEFAULT 0`,
   ]) {
     try {
       await pool.query(sql);
@@ -297,29 +300,6 @@ const upload = multer({
   },
 });
 
-async function checkRateLimitDb(key, maxHits, windowMs) {
-  const now = new Date();
-  const [rows] = await pool.query('SELECT hit_count, window_start FROM rate_limits WHERE id_key = ? LIMIT 1', [
-    key,
-  ]);
-  const row = rows[0];
-  if (!row) {
-    await pool.query('INSERT INTO rate_limits (id_key, hit_count, window_start) VALUES (?, 1, ?)', [key, now]);
-    return { ok: true };
-  }
-  const start = new Date(row.window_start).getTime();
-  if (now.getTime() - start > windowMs) {
-    await pool.query('UPDATE rate_limits SET hit_count = 1, window_start = ? WHERE id_key = ?', [now, key]);
-    return { ok: true };
-  }
-  if (row.hit_count >= maxHits) {
-    const retryAfterSec = Math.ceil((windowMs - (now.getTime() - start)) / 1000);
-    return { ok: false, retryAfterSec };
-  }
-  await pool.query('UPDATE rate_limits SET hit_count = hit_count + 1 WHERE id_key = ?', [key]);
-  return { ok: true };
-}
-
 function filePublicOrPrivateUrl(req, filename, isPrivate) {
   const base = (process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
   if (isPrivate) return `${base}/api/files/${filename}`;
@@ -332,17 +312,66 @@ function publicUrl(req, filename) {
   return `${base.replace(/\/$/, '')}/uploads/${filename}`;
 }
 
-function signUser(user) {
+async function checkRateLimitDb(key, maxHits, windowMs) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.query(
+      'SELECT hit_count, window_start FROM rate_limits WHERE id_key = ? LIMIT 1 FOR UPDATE',
+      [key],
+    );
+    const now = new Date();
+    const row = rows[0];
+    if (!row) {
+      await conn.query('INSERT INTO rate_limits (id_key, hit_count, window_start) VALUES (?, 1, ?)', [
+        key,
+        now,
+      ]);
+      await conn.commit();
+      return { ok: true };
+    }
+    const start = new Date(row.window_start).getTime();
+    if (now.getTime() - start > windowMs) {
+      await conn.query('UPDATE rate_limits SET hit_count = 1, window_start = ? WHERE id_key = ?', [
+        now,
+        key,
+      ]);
+      await conn.commit();
+      return { ok: true };
+    }
+    if (row.hit_count >= maxHits) {
+      await conn.commit();
+      const retryAfterSec = Math.ceil((windowMs - (now.getTime() - start)) / 1000);
+      return { ok: false, retryAfterSec };
+    }
+    await conn.query('UPDATE rate_limits SET hit_count = hit_count + 1 WHERE id_key = ?', [key]);
+    await conn.commit();
+    return { ok: true };
+  } catch (e) {
+    try {
+      await conn.rollback();
+    } catch {
+      /* ignore */
+    }
+    logError('rateLimit', { error: e.message });
+    return { ok: true };
+  } finally {
+    conn.release();
+  }
+}
+
+function signUser(user, remember = false) {
+  const tv = Number(user.token_version || 0);
   return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { id: user.id, email: user.email, role: user.role, tv },
     JWT_SECRET,
-    { expiresIn: '14d' },
+    { expiresIn: remember ? '7d' : '12h' },
   );
 }
 
 function profileRow(row) {
   if (!row) return null;
-  const { password_hash, ...rest } = row;
+  const { password_hash, token_version, ...rest } = row;
   return {
     ...rest,
     email_verified: row.email_verified === undefined ? true : !!row.email_verified,
@@ -357,6 +386,10 @@ async function auth(req, res, next) {
     const payload = jwt.verify(token, JWT_SECRET);
     const [rows] = await pool.query('SELECT * FROM users WHERE id = :id LIMIT 1', { id: payload.id });
     if (!rows[0]) return res.status(401).json({ error: 'Kullanıcı yok' });
+    const tv = Number(rows[0].token_version || 0);
+    if (payload.tv !== undefined && Number(payload.tv) !== tv) {
+      return res.status(401).json({ error: 'Oturum sonlandırıldı. Tekrar giriş yapın.' });
+    }
     req.user = rows[0];
     next();
   } catch {
@@ -372,7 +405,11 @@ function optionalAuth(req, _res, next) {
     if (err || !payload?.id) return next();
     try {
       const [rows] = await pool.query('SELECT * FROM users WHERE id = :id LIMIT 1', { id: payload.id });
-      req.user = rows[0] || null;
+      const user = rows[0];
+      if (!user) return next();
+      const tv = Number(user.token_version || 0);
+      if (payload.tv !== undefined && Number(payload.tv) !== tv) return next();
+      req.user = user;
     } catch {
       /* ignore */
     }
@@ -395,7 +432,7 @@ app.get('/api/health', async (_req, res) => {
       iyzico: isIyzicoReady(),
     });
   } catch (e) {
-    res.status(503).json({ ok: false, db: false, error: e.message });
+    res.status(503).json({ ok: false, db: false, error: 'Veritaban� kullan�lam�yor' });
   }
 });
 
@@ -479,7 +516,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (!rl.ok) {
       return res.status(429).json({ error: 'Çok fazla deneme. Bir süre sonra tekrar deneyin.', retryAfterSec: rl.retryAfterSec });
     }
-    const { email, password } = req.body || {};
+    const { email, password, remember } = req.body || {};
     const [rows] = await pool.query('SELECT * FROM users WHERE email = :email LIMIT 1', {
       email: String(email || '').trim().toLowerCase(),
     });
@@ -487,9 +524,14 @@ app.post('/api/auth/login', async (req, res) => {
     if (!user || !(await bcrypt.compare(password || '', user.password_hash))) {
       return res.status(401).json({ error: 'E-posta veya şifre hatalı' });
     }
-    res.json({ token: signUser(user), user: profileRow(user), profile: profileRow(user) });
+    res.json({
+      token: signUser(user, Boolean(remember)),
+      user: profileRow(user),
+      profile: profileRow(user),
+    });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    logError('login', { error: e.message });
+    res.status(500).json({ error: publicError(e, 'Giriş başarısız') });
   }
 });
 
@@ -500,8 +542,26 @@ app.post('/api/auth/change-password', auth, async (req, res) => {
   const ok = await bcrypt.compare(current, req.user.password_hash || '');
   if (!ok) return res.status(400).json({ error: 'Mevcut şifre hatalı' });
   const hash = await bcrypt.hash(next, 10);
-  await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, req.user.id]);
-  res.json({ ok: true, message: 'Şifre güncellendi' });
+  await pool.query(
+    'UPDATE users SET password_hash = ?, token_version = COALESCE(token_version, 0) + 1 WHERE id = ?',
+    [hash, req.user.id],
+  );
+  const [rows] = await pool.query('SELECT * FROM users WHERE id = ?', [req.user.id]);
+  const user = rows[0];
+  res.json({
+    ok: true,
+    message: 'Şifre güncellendi. Diğer oturumlar kapatıldı.',
+    token: signUser(user, true),
+    user: profileRow(user),
+    profile: profileRow(user),
+  });
+});
+
+app.post('/api/auth/logout', auth, async (req, res) => {
+  await pool.query('UPDATE users SET token_version = COALESCE(token_version, 0) + 1 WHERE id = ?', [
+    req.user.id,
+  ]);
+  res.json({ ok: true });
 });
 
 app.post('/api/auth/verify-email', async (req, res) => {
@@ -576,7 +636,7 @@ app.patch('/api/auth/profile', auth, async (req, res) => {
     const [rows] = await pool.query('SELECT * FROM users WHERE id = :id', { id: req.user.id });
     res.json({ profile: profileRow(rows[0]) });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: publicError(e, 'İşlem başarısız') });
   }
 });
 
@@ -638,7 +698,11 @@ app.get('/api/auth/google/status', (_req, res) => {
   res.json({
     enabled: GOOGLE_AUTH_ENABLED && Boolean(GOOGLE_CLIENT_ID),
     clientId: GOOGLE_AUTH_ENABLED ? GOOGLE_CLIENT_ID || null : null,
-    note: GOOGLE_AUTH_ENABLED ? null : 'Google giriş kapalı (GOOGLE_AUTH_ENABLED)',
+    note: GOOGLE_AUTH_ENABLED
+      ? null
+      : GOOGLE_CLIENT_ID
+        ? 'Google giriş kapalı (GOOGLE_AUTH_ENABLED=false)'
+        : 'Google CLIENT_ID tanımlayın',
   });
 });
 
@@ -719,11 +783,23 @@ app.post('/api/auth/google', async (req, res) => {
 // ---- Upload ----
 app.post('/api/upload', auth, (req, res) => {
   upload.single('file')(req, res, async (err) => {
-    if (err) return res.status(400).json({ error: err.message || 'Yükleme hatası' });
+    if (err) return res.status(400).json({ error: publicError(err, 'Yükleme hatası') });
     if (!req.file) return res.status(400).json({ error: 'Dosya yok' });
-    const ext = path.extname(req.file.originalname || '').slice(0, 12).toLowerCase();
+    let mime;
+    try {
+      mime = assertUploadContent(req.file);
+    } catch (e) {
+      return res.status(400).json({ error: publicError(e, 'Geçersiz dosya') });
+    }
+    const extMap = {
+      'image/jpeg': '.jpg',
+      'image/png': '.png',
+      'image/gif': '.gif',
+      'image/webp': '.webp',
+      'application/pdf': '.pdf',
+    };
+    const ext = extMap[mime] || path.extname(req.file.originalname || '').slice(0, 12).toLowerCase();
     const filename = `${crypto.randomUUID()}${ext}`;
-    const mime = req.file.mimetype || 'application/octet-stream';
     const isPrivate =
       req.query.private === '1' ||
       req.query.private === 'true' ||
@@ -734,7 +810,7 @@ app.post('/api/upload', auth, (req, res) => {
         [filename, mime, req.file.buffer, isPrivate ? 1 : 0, req.user.id],
       );
     } catch (e) {
-      console.error('upload save', e.message);
+      logError('upload save', { error: e.message });
       return res.status(500).json({ error: 'Dosya kaydedilemedi' });
     }
     if (!isPrivate) {
@@ -841,7 +917,7 @@ app.get('/api/jobs', optionalAuth, async (req, res) => {
     await sanitizeJobImages(jobs);
     res.json(jobs);
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: publicError(e, 'İşlem başarısız') });
   }
 });
 
@@ -976,7 +1052,7 @@ app.post('/api/jobs', auth, async (req, res) => {
   } catch (e) {
     await conn.rollback();
     console.error('POST /api/jobs', e);
-    res.status(500).json({ error: e.message || 'İlan kaydedilemedi' });
+    res.status(500).json({ error: publicError(e, 'İlan kaydedilemedi') });
   } finally {
     conn.release();
   }
@@ -1239,7 +1315,7 @@ app.post('/api/applications', auth, async (req, res) => {
     res.status(201).json({ id });
   } catch (e) {
     if (e.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Zaten başvurdunuz' });
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: publicError(e, 'İşlem başarısız') });
   }
 });
 
@@ -1876,7 +1952,7 @@ app.patch('/api/admin/users/:id', auth, async (req, res) => {
     }
   }
   if (role) {
-    // Admin rolü API üzerinden verilemez (yalnızca candidate ↔ employer)
+    // Admin rolü API üzerinden verilemez (yalnızca candidate <-> employer)
     if (!['candidate', 'employer'].includes(role)) {
       return res.status(400).json({ error: 'Admin rolü yalnızca veritabanından atanabilir' });
     }
@@ -1955,7 +2031,7 @@ app.delete('/api/jobs/:id', auth, async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     await conn.rollback();
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: publicError(e, 'İşlem başarısız') });
   } finally {
     conn.release();
   }

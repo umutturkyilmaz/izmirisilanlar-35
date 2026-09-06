@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
+import DocumentHead from '@/components/feature/DocumentHead';
 import { useAuth } from '@/hooks/useAuth';
 import { getPackageById, formatPrice, JOB_PACKAGES } from '@/data/packages';
 import { addCreditsFromPackage } from '@/lib/credits';
@@ -116,6 +117,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <DocumentHead title="Ödeme / Paket Talebi" path="/odeme" />
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <div className="px-4 md:px-6 lg:px-8 max-w-5xl mx-auto">

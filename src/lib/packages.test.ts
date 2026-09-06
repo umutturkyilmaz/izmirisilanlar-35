@@ -1,10 +1,10 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { formatPrice, getPackageById, JOB_PACKAGES } from '@/data/packages';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 const store: Record<string, string> = {};
 
-beforeEach(() => {
+function mockStorage() {
   Object.keys(store).forEach((k) => delete store[k]);
   globalThis.localStorage = {
     getItem: (k: string) => store[k] ?? null,
@@ -20,7 +20,7 @@ beforeEach(() => {
     key: () => null,
     length: 0,
   } as Storage;
-});
+}
 
 describe('packages', () => {
   it('has three packages with expected durations', () => {
@@ -31,13 +31,19 @@ describe('packages', () => {
   });
 
   it('formats TRY price', () => {
-    const text = formatPrice(499);
-    expect(text).toContain('499');
+    expect(formatPrice(499)).toContain('499');
+  });
+
+  it('does not promise unimplemented email digest features', () => {
+    const all = JOB_PACKAGES.flatMap((p) => p.features).join(' ');
+    expect(all.toLowerCase()).not.toContain('performans özeti');
+    expect(all.toLowerCase()).not.toMatch(/e-posta bildirim/);
   });
 });
 
 describe('rateLimit', () => {
   it('allows first attempts then blocks', () => {
+    mockStorage();
     const key = `test_${Date.now()}`;
     expect(checkRateLimit(key, 2, 60_000).ok).toBe(true);
     expect(checkRateLimit(key, 2, 60_000).ok).toBe(true);

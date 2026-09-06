@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string, remember = true) => {
     try {
       const data = await api<{ token: string; user: Profile; profile: Profile }>('/api/auth/login', {
-        body: { email, password },
+        body: { email, password, remember },
         auth: false,
       });
       setToken(data.token, remember);
@@ -141,6 +141,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    try {
+      if (getToken()) {
+        await api('/api/auth/logout', { method: 'POST', body: {} });
+      }
+    } catch {
+      /* ignore */
+    }
     setToken(null);
     setUser(null);
     setProfile(null);

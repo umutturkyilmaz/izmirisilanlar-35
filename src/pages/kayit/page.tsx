@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import GoogleSignInButton from '@/components/feature/GoogleSignInButton';
+import DocumentHead from '@/components/feature/DocumentHead';
 import { useAuth } from '@/hooks/useAuth';
 import { ASSETS } from '@/lib/assets';
 import { GOOGLE_CLIENT_ID } from '@/lib/site';
@@ -105,6 +106,7 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <DocumentHead title="Kayıt Ol" description="Aday veya işveren olarak İzmir İş İlanları 35'e ücretsiz kayıt olun." path="/kayit" />
       <Navbar />
       <main className="flex-1 flex items-center justify-center px-4 py-12 md:py-20">
         <div className="w-full max-w-lg">

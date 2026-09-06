@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
+import DocumentHead from '@/components/feature/DocumentHead';
 import { ASSETS } from '@/lib/assets';
 import { api } from '@/lib/api';
 
@@ -28,7 +29,9 @@ export default function AboutPage() {
           { value: String(d.successfulApplications || 0), label: 'Başvuru', icon: 'ri-checkbox-circle-line' },
         ]);
       })
-      .catch(() => {});
+      .catch(() => {
+        /* istatistik isteğe bağlı */
+      });
   }, []);
 
   const values = [
@@ -56,6 +59,11 @@ export default function AboutPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <DocumentHead
+        title="Hakkımızda"
+        description="İzmir İş İlanları 35 — güvenilir istihdam platformu."
+        path="/hakkimizda"
+      />
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
 

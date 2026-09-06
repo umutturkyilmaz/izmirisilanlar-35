@@ -84,7 +84,8 @@ export default function ApplicationsSection({ employerId }: ApplicationsSectionP
         return next;
       });
     } catch {
-      // silent
+      setBulkMsg({ type: 'error', text: 'Durum güncellenemedi' });
+      setTimeout(() => setBulkMsg(null), 3000);
     } finally {
       setUpdatingId(null);
     }

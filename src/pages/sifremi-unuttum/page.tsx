@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
+import DocumentHead from '@/components/feature/DocumentHead';
 import { api } from '@/lib/api';
 
 export default function ForgotPasswordPage() {
@@ -35,13 +36,13 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <DocumentHead title="Şifremi Unuttum" path="/sifremi-unuttum" />
       <Navbar />
       <main className="flex-1 flex items-center justify-center px-4 py-12 md:py-20">
         <div className="w-full max-w-md bg-background-50 dark:bg-background-100 rounded-2xl border border-background-200 p-6 md:p-8">
           <h1 className="font-heading font-bold text-xl text-foreground-950 mb-2">Şifremi Unuttum</h1>
           <p className="text-sm text-foreground-600 mb-6">
-            Kayıtlı e-posta adresinizi yazın. E-posta servisi aktif olduğunda sıfırlama bağlantısı gönderilecek; şimdilik
-            sorun yaşarsanız iletişim formundan yazın.
+            Kayıtlı e-posta adresinizi yazın. Hesap varsa şifre sıfırlama bağlantısı gönderilir (spam klasörünü de kontrol edin).
           </p>
           {msg && (
             <div
