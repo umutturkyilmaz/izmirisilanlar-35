@@ -184,7 +184,11 @@ export default function Navbar() {
                     <div className="px-4 py-2 border-b border-background-200">
                       <p className="text-sm font-medium text-foreground-950">{profile.full_name}</p>
                       <p className="text-xs text-foreground-500">
-                        {profile.role === 'admin' ? 'Yönetici' : profile.role === 'employer' ? 'İşveren' : 'Aday'}
+                        {profile.role === 'admin'
+                          ? 'Yönetici · İşveren yetkisi'
+                          : profile.role === 'employer'
+                            ? 'İşveren'
+                            : 'Aday'}
                       </p>
                     </div>
                     <Link
@@ -195,6 +199,26 @@ export default function Navbar() {
                       <i className="ri-user-line text-base" />
                       {t('nav.profile')}
                     </Link>
+                    {(profile.role === 'employer' || profile.role === 'admin') && (
+                      <>
+                        <Link
+                          to="/ilanlarim"
+                          onClick={() => setIsProfileMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                        >
+                          <i className="ri-briefcase-line text-base" />
+                          İlanlarım
+                        </Link>
+                        <Link
+                          to="/ilan-ekle"
+                          onClick={() => setIsProfileMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                        >
+                          <i className="ri-add-circle-line text-base" />
+                          İlan Ekle
+                        </Link>
+                      </>
+                    )}
                     {profile.role === 'candidate' && (
                       <>
                         <Link
@@ -317,6 +341,26 @@ export default function Navbar() {
                   <i className="ri-user-line mr-2" />
                   {t('nav.profile')}
                 </Link>
+                {(profile.role === 'employer' || profile.role === 'admin') && (
+                  <>
+                    <Link
+                      to="/ilanlarim"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                    >
+                      <i className="ri-briefcase-line mr-2" />
+                      İlanlarım
+                    </Link>
+                    <Link
+                      to="/ilan-ekle"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                    >
+                      <i className="ri-add-circle-line mr-2" />
+                      İlan Ekle
+                    </Link>
+                  </>
+                )}
                 {profile.role === 'candidate' && (
                   <>
                     <Link

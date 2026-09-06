@@ -887,6 +887,7 @@ app.post('/api/jobs', auth, async (req, res) => {
   if (!['employer', 'admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'İşveren gerekli' });
   }
+  // Admin = site sahibi: doğrulama / paket onayı gerekmez, doğrudan yayınlayabilir
   if (req.user.role === 'employer' && req.user.dogrulama_durumu !== 'verified') {
     return res.status(403).json({ error: 'İşveren hesabı henüz doğrulanmadı' });
   }
@@ -961,7 +962,8 @@ app.post('/api/jobs', auth, async (req, res) => {
         requirements: b.requirements ? JSON.stringify(b.requirements) : null,
         benefits: b.benefits ? JSON.stringify(b.benefits) : null,
         image_url: b.image_url || null,
-        status: isAdmin ? b.status || 'active' : 'pending',
+        // Admin her zaman active; işveren her zaman pending (body ile bypass yok)
+        status: isAdmin ? 'active' : 'pending',
         featured: featured ? 1 : 0,
         expires_at: expiresAt,
         credit_id: usedCreditId,
@@ -1054,13 +1056,14 @@ app.patch('/api/jobs/:id', auth, async (req, res) => {
   res.json(parseJob(next[0]));
 });
 
-/** Paket hakkı ile ilan yenileme (atomik) */
+/** Paket hakkı ile ilan yenileme (atomik). İşveren → pending; Admin → doğrudan active. */
 app.post('/api/jobs/:id/renew', auth, async (req, res) => {
   if (!['employer', 'admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'Yetki yok' });
   }
+  const isAdmin = req.user.role === 'admin';
   const creditId = req.body?.credit_id;
-  if (!creditId) return res.status(400).json({ error: 'Paket hakkı gerekli' });
+  if (!isAdmin && !creditId) return res.status(400).json({ error: 'Paket hakkı gerekli' });
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
@@ -1073,33 +1076,53 @@ app.post('/api/jobs/:id/renew', auth, async (req, res) => {
       await conn.rollback();
       return res.status(404).json({ error: 'İlan yok' });
     }
-    if (job.employer_id !== req.user.id && req.user.role !== 'admin') {
+    if (job.employer_id !== req.user.id && !isAdmin) {
       await conn.rollback();
       return res.status(403).json({ error: 'Yetki yok' });
     }
-    const [credits] = await conn.query(
-      `SELECT * FROM employer_credits WHERE id = :id AND employer_id = :uid AND remaining > 0 LIMIT 1 FOR UPDATE`,
-      { id: creditId, uid: req.user.id },
-    );
-    const credit = credits[0];
-    if (!credit) {
-      await conn.rollback();
-      return res.status(400).json({ error: 'Geçerli paket hakkı bulunamadı' });
+
+    let featured = !!job.featured;
+    let expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    let usedCreditId = job.credit_id || null;
+
+    if (isAdmin && !creditId) {
+      const days = Number(req.body?.duration_days) || 30;
+      expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+      if (req.body?.featured !== undefined) featured = Boolean(req.body.featured);
+    } else {
+      const [credits] = await conn.query(
+        `SELECT * FROM employer_credits WHERE id = :id AND employer_id = :uid AND remaining > 0 LIMIT 1 FOR UPDATE`,
+        { id: creditId, uid: req.user.id },
+      );
+      const credit = credits[0];
+      if (!credit) {
+        await conn.rollback();
+        return res.status(400).json({ error: 'Geçerli paket hakkı bulunamadı' });
+      }
+      await conn.query(`UPDATE employer_credits SET remaining = remaining - 1 WHERE id = :id`, {
+        id: credit.id,
+      });
+      featured = !!credit.featured;
+      expires = new Date(Date.now() + (credit.duration_days || 7) * 24 * 60 * 60 * 1000);
+      usedCreditId = credit.id;
     }
-    await conn.query(`UPDATE employer_credits SET remaining = remaining - 1 WHERE id = :id`, {
-      id: credit.id,
-    });
-    const expires = new Date(Date.now() + (credit.duration_days || 7) * 24 * 60 * 60 * 1000);
+
     await conn.query(
-      `UPDATE jobs SET status = 'pending', featured = :featured, expires_at = :exp, credit_id = :cid WHERE id = :id`,
-      { featured: credit.featured ? 1 : 0, exp: expires, cid: credit.id, id: job.id },
+      `UPDATE jobs SET status = :status, featured = :featured, expires_at = :exp, credit_id = :cid WHERE id = :id`,
+      {
+        status: isAdmin ? 'active' : 'pending',
+        featured: featured ? 1 : 0,
+        exp: expires,
+        cid: usedCreditId,
+        id: job.id,
+      },
     );
     await conn.commit();
     const [next] = await pool.query('SELECT * FROM jobs WHERE id = :id', { id: job.id });
     res.json(parseJob(next[0]));
   } catch (e) {
     await conn.rollback();
-    res.status(500).json({ error: e.message || 'Yenileme başarısız' });
+    res.status(500).json({ error: 'Yenileme başarısız' });
   } finally {
     conn.release();
   }

@@ -210,21 +210,26 @@ export default function EmployerProfilePage() {
   };
 
   const handleRenewJob = async (jobId: string) => {
-    if (!user) return;
+    if (!user || !profile) return;
     setJobActionMsg('');
-    const credits = await fetchCredits(user.id);
-    if (!credits.length) {
-      setJobActionMsg('Yenilemek için paket hakkınız yok. Önce paket satın alın.');
-      return;
-    }
+    const isAdmin = profile.role === 'admin';
     try {
+      let body: { credit_id?: string; duration_days?: number } = {};
+      if (isAdmin) {
+        body = { duration_days: 30 };
+      } else {
+        const credits = await fetchCredits(user.id);
+        if (!credits.length) {
+          setJobActionMsg('Yenilemek için paket hakkınız yok. Önce paket satın alın.');
+          return;
+        }
+        body = { credit_id: credits[0].id };
+      }
       const updated = await api<{
         expires_at: string;
         status: string;
         featured: boolean;
-      }>(`/api/jobs/${jobId}/renew`, {
-        body: { credit_id: credits[0].id },
-      });
+      }>(`/api/jobs/${jobId}/renew`, { body });
       setMyJobs((prev) =>
         prev.map((j) =>
           j.id === jobId
@@ -237,7 +242,9 @@ export default function EmployerProfilePage() {
             : j,
         ),
       );
-      setJobActionMsg('İlan paket hakkınızla yenilendi.');
+      setJobActionMsg(
+        isAdmin ? 'İlan yenilendi ve yayında.' : 'İlan paket hakkınızla yenilendi (admin onayı bekliyor).',
+      );
     } catch (err) {
       setJobActionMsg(err instanceof Error ? err.message : 'Yenileme başarısız');
     }
@@ -380,6 +387,7 @@ export default function EmployerProfilePage() {
   }
 
   const verStatus = verificationStatusConfig[profile.dogrulama_durumu || 'unverified'];
+  const isAdminUser = profile.role === 'admin';
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -387,7 +395,24 @@ export default function EmployerProfilePage() {
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-12">
         <div className="px-4 md:px-6 lg:px-8 max-w-5xl mx-auto">
 
-          {/* Verification Status Banner */}
+          {/* Admin: doğrulama gerekmez — işveren yetkisiyle ilan verebilir */}
+          {isAdminUser ? (
+            <div className="rounded-xl border border-primary-200 bg-primary-50/60 p-4 md:p-5 mb-6">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-white/50 flex items-center justify-center shrink-0">
+                  <i className="ri-admin-line text-lg text-primary-700" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-semibold text-sm md:text-base text-primary-900">
+                    Yönetici · İşveren yetkisi
+                  </h3>
+                  <p className="text-xs md:text-sm text-primary-800/80 mt-1">
+                    Paket ve kimlik onayı gerekmez. İlanlar doğrudan yayına alınır.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
           <div className={`rounded-xl border p-4 md:p-5 mb-6 ${verStatus.color}`}>
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-white/50 dark:bg-black/20 flex items-center justify-center shrink-0 mt-0.5">
@@ -411,6 +436,7 @@ export default function EmployerProfilePage() {
               </div>
             </div>
           </div>
+          )}
 
           {/* Profile Header */}
           <div className="bg-background-50 dark:bg-background-100 rounded-2xl border border-background-200 dark:border-background-200 p-6 md:p-8 mb-6">
@@ -560,7 +586,7 @@ export default function EmployerProfilePage() {
           </div>
 
           {/* Doğrulama Talebi Butonu (sadece unverified ve rejected durumlarında) */}
-          {(profile.dogrulama_durumu === 'unverified' || profile.dogrulama_durumu === 'rejected') && !isEditing && (
+          {!isAdminUser && (profile.dogrulama_durumu === 'unverified' || profile.dogrulama_durumu === 'rejected') && !isEditing && (
             <div className="bg-accent-50 dark:bg-accent-900/20 rounded-xl border border-accent-200 dark:border-accent-700 p-5 mb-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
