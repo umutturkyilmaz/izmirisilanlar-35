@@ -863,9 +863,10 @@ app.get('/api/categories', async (_req, res) => {
 
 // ---- Jobs ----
 async function expireOutdatedJobs() {
-  await pool.query(
+  const [r] = await pool.query(
     `UPDATE jobs SET status = 'expired' WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at < NOW()`,
   );
+  return r.affectedRows || 0;
 }
 
 app.get('/api/jobs', optionalAuth, async (req, res) => {
@@ -2053,13 +2054,6 @@ app.get('/api/admin/stats', auth, async (req, res) => {
     iyzico: isIyzicoReady(),
   });
 });
-
-async function expireOutdatedJobs() {
-  const [r] = await pool.query(
-    `UPDATE jobs SET status = 'expired' WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at < NOW()`,
-  );
-  return r.affectedRows || 0;
-}
 
 app.post('/api/jobs/expire', async (req, res) => {
   const secret = req.headers['x-cron-secret'] || req.body?.secret;
