@@ -9,6 +9,7 @@ import ApplicationsSection from '@/pages/profil/isveren/components/ApplicationsS
 import { fetchCredits } from '@/lib/credits';
 import { downloadInvoicePdf } from '@/lib/invoice';
 import { jobEditPath, jobPath } from '@/lib/jobPath';
+import { isValidVkn, normalizeVkn } from '@/lib/vkn';
 
 interface JobListing {
   id: string;
@@ -138,16 +139,19 @@ export default function EmployerProfilePage() {
     setSaving(true);
     setSaveMsg('');
 
+    let payload = { ...form };
     if (form.vergi_numarasi && form.vergi_numarasi.trim().length > 0) {
-      const cleaned = form.vergi_numarasi.replace(/\s/g, '');
-      if (!/^\d{10}$/.test(cleaned)) {
+      const cleaned = normalizeVkn(form.vergi_numarasi);
+      if (!isValidVkn(cleaned)) {
         setSaving(false);
-        setSaveMsg('Vergi numarası tam olarak 10 haneli olmalıdır.');
+        setSaveMsg('Vergi numarası geçersiz. 10 hane ve kontrol basamağı doğru olmalı.');
         return;
       }
+      payload = { ...form, vergi_numarasi: cleaned };
+      setForm((prev) => ({ ...prev, vergi_numarasi: cleaned }));
     }
 
-    const result = await updateProfile(form);
+    const result = await updateProfile(payload);
     setSaving(false);
     if (result.success) {
       setSaveMsg('Profil başarıyla güncellendi!');
@@ -164,9 +168,9 @@ export default function EmployerProfilePage() {
       return;
     }
 
-    const cleaned = form.vergi_numarasi.replace(/\s/g, '');
-    if (!/^\d{10}$/.test(cleaned)) {
-      setVerificationMsg('Vergi numarası tam olarak 10 haneli olmalıdır.');
+    const cleaned = normalizeVkn(form.vergi_numarasi);
+    if (!isValidVkn(cleaned)) {
+      setVerificationMsg('Vergi numarası geçersiz. 10 hane ve kontrol basamağı doğru olmalı.');
       return;
     }
 
@@ -533,6 +537,9 @@ export default function EmployerProfilePage() {
                   />
                   {form.vergi_numarasi && form.vergi_numarasi.length < 10 && (
                     <p className="text-xs text-red-500 mt-1">Vergi numarası 10 haneli olmalıdır.</p>
+                  )}
+                  {form.vergi_numarasi.length === 10 && !isValidVkn(form.vergi_numarasi) && (
+                    <p className="text-xs text-red-500 mt-1">Vergi numarası kontrol basamağı hatalı.</p>
                   )}
                 </div>
 

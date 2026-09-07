@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import { isIyzicoReady, initializeCheckoutForm, retrieveCheckoutForm } from './iyzico.js';
 import { getServerPackage, packageCreditsMeta } from './packages.js';
 import { assertUploadContent, publicError } from './security.js';
+import { isValidVkn, normalizeVkn } from './vkn.js';
 import {
   isMailReady,
   sendPasswordResetEmail,
@@ -466,9 +467,18 @@ app.post('/api/auth/register', async (req, res) => {
     if (role === 'employer' && !String(company_name || '').trim()) {
       return res.status(400).json({ error: 'İşveren kaydı için şirket / unvan gerekli' });
     }
+    let vergiNorm = null;
+    if (role === 'employer') {
+      vergiNorm = normalizeVkn(vergi_numarasi);
+      if (!isValidVkn(vergiNorm)) {
+        return res.status(400).json({
+          error: 'Geçersiz vergi numarası. 10 haneli ve kontrol basamağı doğru olmalı.',
+        });
+      }
+    }
     const id = uid();
     const hash = await bcrypt.hash(password, 10);
-    const pending = role === 'employer' && vergi_numarasi;
+    const pending = role === 'employer' && Boolean(vergiNorm);
     await pool.query(
       `INSERT INTO users
       (id, email, password_hash, role, full_name, phone, city, company_name, vergi_numarasi, dogrulama_durumu, dogrulama_talebi_tarihi, email_verified)
@@ -482,7 +492,7 @@ app.post('/api/auth/register', async (req, res) => {
         phone: phone || null,
         city: city || null,
         company_name: role === 'employer' ? company_name || null : null,
-        vergi: role === 'employer' ? vergi_numarasi || null : null,
+        vergi: vergiNorm,
         durum: pending ? 'pending' : 'unverified',
         talep: pending ? new Date() : null,
       },
@@ -617,6 +627,17 @@ app.patch('/api/auth/profile', auth, async (req, res) => {
     const params = { id: req.user.id };
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
+        if (key === 'vergi_numarasi') {
+          const vergiNorm = normalizeVkn(req.body[key]);
+          if (vergiNorm && !isValidVkn(vergiNorm)) {
+            return res.status(400).json({
+              error: 'Geçersiz vergi numarası. 10 haneli ve kontrol basamağı doğru olmalı.',
+            });
+          }
+          sets.push(`${key} = :${key}`);
+          params[key] = vergiNorm || null;
+          continue;
+        }
         sets.push(`${key} = :${key}`);
         params[key] = req.body[key];
       }
@@ -744,12 +765,14 @@ app.post('/api/auth/google', async (req, res) => {
       let dogrulama = 'unverified';
       if (roleWanted === 'employer') {
         companyName = String(req.body?.company_name || req.body?.companyName || '').trim() || null;
-        vergi = String(req.body?.vergi_numarasi || req.body?.vergiNumarasi || '').replace(/\D/g, '');
+        vergi = normalizeVkn(req.body?.vergi_numarasi || req.body?.vergiNumarasi || '');
         if (!companyName) {
           return res.status(400).json({ error: 'İşveren Google kaydı için şirket adı gerekli' });
         }
-        if (!vergi || vergi.length !== 10) {
-          return res.status(400).json({ error: 'İşveren Google kaydı için 10 haneli vergi numarası gerekli' });
+        if (!isValidVkn(vergi)) {
+          return res.status(400).json({
+            error: 'İşveren Google kaydı için geçerli 10 haneli vergi numarası gerekli',
+          });
         }
         dogrulama = 'pending';
       }

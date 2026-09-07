@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { ASSETS } from '@/lib/assets';
 import { GOOGLE_CLIENT_ID } from '@/lib/site';
 import { homeForRole } from '@/lib/redirect';
+import { isValidVkn, normalizeVkn } from '@/lib/vkn';
 
 export default function RegisterPage() {
   const { t } = useTranslation('common');
@@ -35,8 +36,8 @@ export default function RegisterPage() {
           setError('Google ile işveren kaydı için şirket adı gerekli.');
           return;
         }
-        if (vergiNumarasi.replace(/\D/g, '').length !== 10) {
-          setError('Google ile işveren kaydı için 10 haneli vergi numarası gerekli.');
+        if (!isValidVkn(vergiNumarasi)) {
+          setError('Google ile işveren kaydı için geçerli 10 haneli vergi numarası gerekli.');
           return;
         }
       }
@@ -45,7 +46,7 @@ export default function RegisterPage() {
         credential,
         role,
         role === 'employer'
-          ? { companyName: companyName.trim(), vergiNumarasi: vergiNumarasi.replace(/\D/g, '') }
+          ? { companyName: companyName.trim(), vergiNumarasi: normalizeVkn(vergiNumarasi) }
           : undefined,
       );
       setIsLoading(false);
@@ -75,8 +76,8 @@ export default function RegisterPage() {
         setError('İşveren olarak kaydolmak için vergi numarası zorunludur.');
         return;
       }
-      if (vergiNumarasi.replace(/\D/g, '').length !== 10) {
-        setError('Vergi numarası tam olarak 10 haneli olmalıdır.');
+      if (!isValidVkn(vergiNumarasi)) {
+        setError('Vergi numarası geçersiz. 10 hane ve kontrol basamağı doğru olmalı.');
         return;
       }
     }
@@ -91,7 +92,7 @@ export default function RegisterPage() {
       phone: phone || undefined,
       city: city || undefined,
       companyName: role === 'employer' ? companyName : undefined,
-      vergiNumarasi: role === 'employer' ? vergiNumarasi : undefined,
+      vergiNumarasi: role === 'employer' ? normalizeVkn(vergiNumarasi) : undefined,
     });
 
     setIsLoading(false);
@@ -282,6 +283,9 @@ export default function RegisterPage() {
                   </div>
                   {vergiNumarasi && vergiNumarasi.length < 10 && (
                     <p className="text-xs text-red-500 mt-1">Vergi numarası tam olarak 10 haneli olmalıdır.</p>
+                  )}
+                  {vergiNumarasi.length === 10 && !isValidVkn(vergiNumarasi) && (
+                    <p className="text-xs text-red-500 mt-1">Vergi numarası kontrol basamağı hatalı.</p>
                   )}
                   <p className="text-xs text-foreground-400 mt-1.5">
                     Platform güvenliği için zorunludur. Vergi numaranız hiçbir yerde yayınlanmaz, sadece doğrulama amaçlı kullanılır.
