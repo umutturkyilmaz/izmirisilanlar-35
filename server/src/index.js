@@ -2054,6 +2054,13 @@ app.get('/api/admin/stats', auth, async (req, res) => {
   });
 });
 
+async function expireOutdatedJobs() {
+  const [r] = await pool.query(
+    `UPDATE jobs SET status = 'expired' WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at < NOW()`,
+  );
+  return r.affectedRows || 0;
+}
+
 app.post('/api/jobs/expire', async (req, res) => {
   const secret = req.headers['x-cron-secret'] || req.body?.secret;
   if (process.env.CRON_SECRET) {
@@ -2063,11 +2070,29 @@ app.post('/api/jobs/expire', async (req, res) => {
   } else if (process.env.NODE_ENV === 'production') {
     return res.status(401).json({ error: 'CRON_SECRET tanımlı değil' });
   }
-  const [r] = await pool.query(
-    `UPDATE jobs SET status = 'expired' WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at < NOW()`,
-  );
-  res.json({ updated: r.affectedRows || 0 });
+  try {
+    const updated = await expireOutdatedJobs();
+    res.json({ updated });
+  } catch (e) {
+    logError('expire http', { error: e.message });
+    res.status(500).json({ error: 'Expire başarısız' });
+  }
 });
+
+/** Harici cron-job.org gerekmez — API saatte bir süresi biten ilanları kapatır. */
+function startExpireScheduler() {
+  const HOUR_MS = 60 * 60 * 1000;
+  const tick = async () => {
+    try {
+      const updated = await expireOutdatedJobs();
+      if (updated > 0) logInfo('expire scheduler', { updated });
+    } catch (e) {
+      logError('expire scheduler', { error: e.message });
+    }
+  };
+  void tick();
+  setInterval(tick, HOUR_MS);
+}
 
 app.use((err, req, res, _next) => {
   logError('unhandled', {
@@ -2090,6 +2115,7 @@ ensureSchema()
         google: GOOGLE_AUTH_ENABLED && Boolean(GOOGLE_CLIENT_ID),
         iyzico: isIyzicoReady(),
       });
+      startExpireScheduler();
     });
   })
   .catch((e) => {
