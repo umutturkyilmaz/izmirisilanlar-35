@@ -117,27 +117,40 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <DocumentHead title="Ödeme / Paket Talebi" path="/odeme" />
+      <DocumentHead
+        title="Ödeme — Paket Satın Al"
+        description="İş ilanı yayınlama paketini satın alın. Fatura bilgileri, mesafeli satış ve iade koşulları."
+        path="/odeme"
+      />
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <div className="px-4 md:px-6 lg:px-8 max-w-5xl mx-auto">
           <div className="mb-8">
             <Link to="/paketler" className="text-sm text-primary-600 hover:underline inline-flex items-center gap-1">
               <i className="ri-arrow-left-line" />
-              Paketlere dön
+              Ürün kataloğuna dön
             </Link>
             <h1 className="font-heading text-2xl md:text-3xl font-bold text-foreground-950 mt-3">
-              Ödeme
+              Satın Al / Ödeme
             </h1>
             <p className="text-foreground-600 text-sm mt-1">
-              Dijital hizmet satışı — iş ilanı yayınlama paketi
+              Dijital ürün: iş ilanı yayınlama paketi · KDV dahil · anında sipariş
+            </p>
+            <p className="text-xs text-foreground-500 mt-2 flex flex-wrap gap-x-3 gap-y-1">
+              <Link to="/mesafeli-satis" className="text-primary-600 hover:underline">Mesafeli satış</Link>
+              <Link to="/iade-iptal" className="text-primary-600 hover:underline">İade / iptal</Link>
+              <Link to="/kvkk" className="text-primary-600 hover:underline">KVKK</Link>
+              <Link to="/gizlilik" className="text-primary-600 hover:underline">Gizlilik</Link>
             </p>
             {!user && (
               <p className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                İlan hakkı tanımlansın diye önce{' '}
-                <Link to="/giris" className="underline font-medium">giriş yapın</Link>
+                Siparişi tamamlamak için{' '}
+                <Link to={`/giris?from=${encodeURIComponent(`/odeme?paket=${selected.id}`)}`} className="underline font-medium">
+                  giriş yapın
+                </Link>
                 {' '}veya{' '}
                 <Link to="/kayit" className="underline font-medium">işveren kaydı</Link> oluşturun.
+                Ürün ve fiyat bilgileri aşağıda herkese açıktır.
               </p>
             )}
             {errors.auth && <p className="mt-2 text-xs text-red-600">{errors.auth}</p>}
@@ -221,9 +234,19 @@ export default function CheckoutPage() {
                     <p className="text-xs text-foreground-600 mt-0.5">
                       {iyzicoOn
                         ? '3D Secure ile iyzico Checkout Form’a yönlendirileceksiniz.'
-                        : 'Online ödeme yakında (iyzico onayı sonrası). Şimdilik talebiniz admin onayına düşer; ücretsiz hak tanımlanmaz.'}
+                        : 'Kart altyapısı iyzico. Canlı tahsilat üye işyeri onayı sonrası açılır; şimdilik sipariş kaydı oluşur ve admin onayıyla hak tanımlanır (ücretsiz otomatik hak yok).'}
                     </p>
                   </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-background-200 bg-background-100/60 px-3 py-2.5 text-xs text-foreground-600 space-y-1">
+                  <p className="font-medium text-foreground-800">Sipariş öncesi yasal belgeler</p>
+                  <p className="flex flex-wrap gap-x-3 gap-y-1">
+                    <Link to="/mesafeli-satis" className="text-primary-600 hover:underline">Mesafeli satış sözleşmesi</Link>
+                    <Link to="/iade-iptal" className="text-primary-600 hover:underline">İade ve iptal politikası</Link>
+                    <Link to="/kvkk" className="text-primary-600 hover:underline">KVKK aydınlatma</Link>
+                    <Link to="/gizlilik" className="text-primary-600 hover:underline">Gizlilik politikası</Link>
+                  </p>
                 </div>
 
                 <label className="flex items-start gap-2.5 mt-4 cursor-pointer">
@@ -238,6 +261,10 @@ export default function CheckoutPage() {
                       Mesafeli satış sözleşmesi
                     </Link>
                     ,{' '}
+                    <Link to="/iade-iptal" className="text-primary-600 hover:underline">
+                      iade / iptal politikası
+                    </Link>
+                    ,{' '}
                     <Link to="/kvkk" className="text-primary-600 hover:underline">
                       KVKK
                     </Link>{' '}
@@ -245,7 +272,7 @@ export default function CheckoutPage() {
                     <Link to="/gizlilik" className="text-primary-600 hover:underline">
                       gizlilik politikasını
                     </Link>{' '}
-                    okudum, dijital hizmet bedelini ödemeyi kabul ediyorum. *
+                    okudum; seçili dijital ürün bedelini ödemeyi kabul ediyorum. *
                   </span>
                 </label>
                 {errors.acceptTerms && <p className="text-xs text-red-600 mt-1">{errors.acceptTerms}</p>}
@@ -258,8 +285,8 @@ export default function CheckoutPage() {
                   {submitting
                     ? 'İşleniyor...'
                     : iyzicoOn
-                      ? `${formatPrice(selected.price)} — iyzico ile Öde`
-                      : `${formatPrice(selected.price)} — Admin Onayına Gönder`}
+                      ? `${formatPrice(selected.price)} — Kart ile Satın Al`
+                      : `${formatPrice(selected.price)} — Siparişi Tamamla`}
                 </button>
               </div>
             </form>
@@ -269,14 +296,30 @@ export default function CheckoutPage() {
                 <h2 className="font-heading font-semibold text-foreground-950 mb-4">Sipariş Özeti</h2>
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between gap-3">
-                    <span className="text-foreground-600">Hizmet</span>
+                    <span className="text-foreground-600">Ürün</span>
                     <span className="font-medium text-foreground-950 text-right">{selected.name}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-foreground-600">Ürün kodu</span>
+                    <span className="font-mono text-xs text-foreground-800">{selected.id}</span>
                   </div>
                   <div className="flex justify-between gap-3">
                     <span className="text-foreground-600">Süre</span>
                     <span className="font-medium text-foreground-950">{selected.durationDays} gün</span>
                   </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-foreground-600">Adet</span>
+                    <span className="font-medium text-foreground-950">1</span>
+                  </div>
                   <p className="text-xs text-foreground-500 leading-relaxed pt-1">{selected.description}</p>
+                  <ul className="text-xs text-foreground-600 space-y-1 pt-1">
+                    {selected.features.slice(0, 4).map((f) => (
+                      <li key={f} className="flex gap-1.5">
+                        <i className="ri-check-line text-primary-600 shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
                   <div className="border-t border-background-200 pt-3 flex justify-between items-center">
                     <span className="font-semibold text-foreground-950">Toplam (KDV dahil)</span>
                     <span className="font-heading text-xl font-bold text-primary-600">
@@ -286,7 +329,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="mt-5 pt-4 border-t border-background-200">
-                  <p className="text-xs font-medium text-foreground-700 mb-2">Diğer paketler</p>
+                  <p className="text-xs font-medium text-foreground-700 mb-2">Diğer satın alınabilir paketler</p>
                   <div className="flex flex-col gap-1.5">
                     {JOB_PACKAGES.map((pkg) => (
                       <Link

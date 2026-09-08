@@ -95,26 +95,78 @@ export function DistanceSalesPage() {
         Bu sözleşme, Platform üzerinden satılan dijital hizmet (iş ilanı yayınlama paketleri)
         için geçerlidir. Satıcı: İzmir İş İlanları 35 işletmesi. Alıcı: paket satın alan işveren.
       </p>
-      <h2 className="font-heading font-semibold text-foreground-950 text-base">Hizmet</h2>
+      <h2 className="font-heading font-semibold text-foreground-950 text-base">Satılan ürün / hizmetler</h2>
       <ul className="list-disc pl-5 space-y-1">
-        <li>Standart İlan — 7 gün yayın</li>
-        <li>Öne Çıkan İlan — 14 gün yayın, vitrin</li>
-        <li>Kurumsal Paket — 30 gün, çoklu ilan hakkı</li>
+        <li>Standart İlan (ürün kodu: standart) — 7 gün yayın — {formatPriceInline(499)}</li>
+        <li>Öne Çıkan İlan (ürün kodu: one-cikan) — 14 gün yayın — {formatPriceInline(899)}</li>
+        <li>Kurumsal Paket (ürün kodu: kurumsal) — 30 gün / çoklu ilan — {formatPriceInline(2499)}</li>
       </ul>
-      <h2 className="font-heading font-semibold text-foreground-950 text-base">Cayma</h2>
+      <p>
+        Güncel fiyat ve satın alma:{' '}
+        <Link to="/paketler" className="text-primary-600 hover:underline">
+          /paketler
+        </Link>
+        . Sipariş:{' '}
+        <Link to="/odeme" className="text-primary-600 hover:underline">
+          /odeme
+        </Link>
+        .
+      </p>
+      <h2 className="font-heading font-semibold text-foreground-950 text-base">Cayma / iade</h2>
       <p>
         Dijital içeriğin ifasına (ilan hakkının tanımlanması) onay verildikten sonra cayma hakkı
-        6502 sayılı Kanun ve ilgili yönetmelik çerçevesinde sınırlanabilir. Kullanılmamış haklar
-        için destek talebi{' '}
-        <Link to="/iletisim" className="text-primary-600 hover:underline">
-          iletişim
-        </Link>{' '}
-        üzerinden iletilebilir.
+        6502 sayılı Kanun ve ilgili yönetmelik çerçevesinde sınırlanabilir. Ayrıntılar için{' '}
+        <Link to="/iade-iptal" className="text-primary-600 hover:underline">
+          İade ve İptal Politikası
+        </Link>
+        .
       </p>
       <h2 className="font-heading font-semibold text-foreground-950 text-base">Ödeme</h2>
       <p>
-        Canlı kart tahsilatı iyzico onayı sonrası aktifleşecektir. Onaya kadar sipariş akışı
-        inceleme ve test amaçlıdır.
+        Kart ile tahsilat iyzico altyapısı üzerinden yapılır (3D Secure). Canlı tahsilat iyzico
+        üye işyeri onayı sonrası aktiftir; onay öncesinde sipariş kaydı oluşturulur ve admin
+        incelemesiyle hak tanımlanabilir.
+      </p>
+    </LegalLayout>
+  );
+}
+
+function formatPriceInline(n: number) {
+  return new Intl.NumberFormat('tr-TR', {
+    style: 'currency',
+    currency: 'TRY',
+    maximumFractionDigits: 0,
+  }).format(n);
+}
+
+export function RefundPage() {
+  return (
+    <LegalLayout title="İade ve İptal Politikası" path="/iade-iptal">
+      <p>
+        İzmir İş İlanları 35 üzerinden satılan ürünler, iş ilanı yayınlama hakkı sağlayan
+        <strong> dijital hizmet paketleridir</strong> (fiziksel ürün gönderimi yoktur).
+      </p>
+      <h2 className="font-heading font-semibold text-foreground-950 text-base">İptal</h2>
+      <p>
+        Ödeme tamamlanmadan önce siparişten vazgeçebilirsiniz. Kart ödeme sayfasından (iyzico)
+        ayrılırsanız tahsilat yapılmaz.
+      </p>
+      <h2 className="font-heading font-semibold text-foreground-950 text-base">İade</h2>
+      <ul className="list-disc pl-5 space-y-1">
+        <li>İlan hakkı henüz kullanılmamışsa destek talebiyle değerlendirme yapılır.</li>
+        <li>
+          Hak tanımlandıktan ve ilan yayınlandıktan sonra dijital ifa başlamış sayılır; cayma
+          hakkı sınırlı olabilir.
+        </li>
+        <li>Hatalı / mükerrer tahsilatlarda iade talebi öncelikli incelenir.</li>
+      </ul>
+      <h2 className="font-heading font-semibold text-foreground-950 text-base">Başvuru</h2>
+      <p>
+        İade / iptal için{' '}
+        <Link to="/iletisim" className="text-primary-600 hover:underline">
+          iletişim
+        </Link>{' '}
+        formunu kullanın; sipariş / ödeme numaranızı yazın. Yanıt süresi hedefi: 1–3 iş günü.
       </p>
     </LegalLayout>
   );

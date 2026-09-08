@@ -143,6 +143,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link to="/iade-iptal" className="text-sm text-foreground-600 hover:text-primary-600 transition-colors">
+                  İade / İptal
+                </Link>
+              </li>
+              <li>
                 <Link to="/mesafeli-satis" className="text-sm text-foreground-600 hover:text-primary-600 transition-colors">
                   {t('footer.terms')}
                 </Link>

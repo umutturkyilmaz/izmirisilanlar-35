@@ -1,0 +1,35 @@
+Konu: Üye işyeri inceleme güncelleme — İzmir İş İlanları 35 (satın alınabilir paketler eklendi)
+
+Kime: inceleme@iyzico.com
+
+---
+
+Merhaba,
+
+İzmir İş İlanları 35 üye işyeri başvurumuz için sitenize satın alınabilir ürün / hizmetleri ekledik. Yeniden incelemenizi rica ederiz.
+
+Site: https://izmirisilanlari35.com
+Ürün kataloğu: https://izmirisilanlari35.com/paketler
+Örnek ödeme / satın alma: https://izmirisilanlari35.com/odeme?paket=standart
+
+Satış kategorisi: Dijital iş ilanı yayınlama paketleri (işverenlere yönelik).
+
+Satın alınabilir ürünler (KDV dahil, TRY):
+1) Standart İlan (ürün kodu: standart) — 499 TL — 7 gün yayın
+2) Öne Çıkan İlan (ürün kodu: one-cikan) — 899 TL — 14 gün yayın
+3) Kurumsal Paket (ürün kodu: kurumsal) — 2.499 TL — 30 gün / çoklu ilan
+
+Yasal sayfalar:
+- Mesafeli satış: https://izmirisilanlari35.com/mesafeli-satis
+- İade / iptal: https://izmirisilanlari35.com/iade-iptal
+- KVKK: https://izmirisilanlari35.com/kvkk
+- Gizlilik: https://izmirisilanlari35.com/gizlilik
+
+Ödeme altyapısı: iyzico Checkout Form (entegrasyon hazır; canlı tahsilat sizin onayınız sonrası açılacaktır).
+
+Panelde “Başvuru Güncelle” tıklandığında yükleme hatası alındığı için bu mail ile bilgilendirme yapıyoruz.
+
+İyi çalışmalar.
+[Ad Soyad]
+[Telefon]
+[Üye işyeri / başvuru e-posta]

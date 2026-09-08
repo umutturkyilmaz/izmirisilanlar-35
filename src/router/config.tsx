@@ -33,6 +33,9 @@ const PrivacyPage = lazyRetry(() =>
 const DistanceSalesPage = lazyRetry(() =>
   import("../pages/yasal/pages").then((m) => ({ default: m.DistanceSalesPage })),
 );
+const RefundPage = lazyRetry(() =>
+  import("../pages/yasal/pages").then((m) => ({ default: m.RefundPage })),
+);
 
 const routes: RouteObject[] = [
   { path: "/", element: <Home /> },
@@ -55,14 +58,7 @@ const routes: RouteObject[] = [
     ),
   },
   { path: "/paketler", element: <Packages /> },
-  {
-    path: "/odeme",
-    element: (
-      <RequireAuth roles={["employer", "admin"]}>
-        <Checkout />
-      </RequireAuth>
-    ),
-  },
+  { path: "/odeme", element: <Checkout /> },
   { path: "/odeme/basarili", element: <PaymentSuccess /> },
   { path: "/odeme/iptal", element: <PaymentCancel /> },
   { path: "/giris", element: <Login /> },
@@ -75,6 +71,7 @@ const routes: RouteObject[] = [
   { path: "/kvkk", element: <KvkkPage /> },
   { path: "/gizlilik", element: <PrivacyPage /> },
   { path: "/mesafeli-satis", element: <DistanceSalesPage /> },
+  { path: "/iade-iptal", element: <RefundPage /> },
   { path: "/profil", element: <ProfileRedirect /> },
   {
     path: "/profil/aday",

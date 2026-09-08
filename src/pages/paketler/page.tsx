@@ -8,28 +8,40 @@ export default function PackagesPage() {
   return (
     <div className="min-h-screen flex flex-col">
       <DocumentHead
-        title="İlan Paketleri"
-        description="İşveren ilan paketleri. Online ödeme yakında; şimdilik talepler admin onayına düşer."
+        title="İlan Paketleri — Satın Al"
+        description="İşverenler için satın alınabilir iş ilanı yayınlama paketleri. Fiyatlar KDV dahil; ödeme sayfasından sipariş verin."
         path="/paketler"
       />
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <section className="px-4 md:px-6 lg:px-8 max-w-6xl mx-auto">
           <div className="text-center max-w-2xl mx-auto mb-10 md:mb-14">
-            <p className="text-sm font-medium text-primary-600 mb-2">İşveren Hizmetleri</p>
+            <p className="text-sm font-medium text-primary-600 mb-2">Dijital ürün kataloğu</p>
             <h1 className="font-heading text-3xl md:text-4xl font-bold text-foreground-950 mb-3">
               İlan Yayınlama Paketleri
             </h1>
             <p className="text-foreground-600 leading-relaxed">
-              İlan yayınlamak için paket talep edin. Online kart ödemesi (iyzico) onay sürecinde;
-              şu an talepleriniz admin onayına düşer. Adaylar için platform ücretsizdir.
+              Aşağıdaki paketler platformumuzda <strong className="font-semibold text-foreground-800">satın alınabilir dijital hizmetlerdir</strong>.
+              Fiyatlar Türk Lirası ve KDV dahildir. <strong className="font-semibold text-foreground-800">Satın Al</strong> ile ödeme
+              sayfasına geçerek siparişinizi tamamlayabilirsiniz. Adaylar için platform ücretsizdir.
             </p>
+          </div>
+
+          <div className="mb-8 rounded-xl border border-background-200 bg-background-100/80 px-4 py-3 text-sm text-foreground-700 max-w-3xl mx-auto text-center">
+            Satış kategorisi: <span className="font-medium">İş ilanı yayınlama / dijital işe alım hizmeti</span>
+            {' · '}
+            <Link to="/mesafeli-satis" className="text-primary-600 hover:underline">Mesafeli satış</Link>
+            {' · '}
+            <Link to="/iade-iptal" className="text-primary-600 hover:underline">İade / iptal</Link>
+            {' · '}
+            <Link to="/kvkk" className="text-primary-600 hover:underline">KVKK</Link>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
             {JOB_PACKAGES.map((pkg) => (
               <article
                 key={pkg.id}
+                id={`paket-${pkg.id}`}
                 className={`relative flex flex-col rounded-2xl border p-6 md:p-7 ${
                   pkg.popular
                     ? 'border-primary-500 bg-primary-50/40 dark:bg-primary-950/20 shadow-lg shadow-primary-500/10'
@@ -48,17 +60,21 @@ export default function PackagesPage() {
                   </span>
                 )}
 
-                <h2 className="font-heading text-xl font-bold text-foreground-950 mt-2">
+                <p className="text-[11px] uppercase tracking-wide text-foreground-500 font-medium mt-1">
+                  Ürün kodu: {pkg.id}
+                </p>
+                <h2 className="font-heading text-xl font-bold text-foreground-950 mt-1">
                   {pkg.name}
                 </h2>
                 <p className="text-sm text-foreground-600 mt-2 min-h-[40px]">{pkg.description}</p>
 
-                <div className="mt-5 mb-6">
+                <div className="mt-5 mb-1">
                   <span className="font-heading text-3xl md:text-4xl font-bold text-foreground-950">
                     {formatPrice(pkg.price)}
                   </span>
-                  <span className="text-sm text-foreground-500 ml-1">/ {pkg.durationDays} gün</span>
+                  <span className="text-sm text-foreground-500 ml-1">KDV dahil</span>
                 </div>
+                <p className="text-xs text-foreground-500 mb-6">Yayın süresi: {pkg.durationDays} gün</p>
 
                 <ul className="flex flex-col gap-2.5 flex-1 mb-7">
                   {pkg.features.map((feature) => (
@@ -71,23 +87,38 @@ export default function PackagesPage() {
 
                 <Link
                   to={`/odeme?paket=${pkg.id}`}
-                  className={`w-full text-center py-3 px-4 rounded-xl font-semibold transition-colors ${
+                  className={`w-full text-center py-3.5 px-4 rounded-xl font-semibold transition-colors ${
                     pkg.popular
                       ? 'bg-primary-600 hover:bg-primary-700 text-white'
                       : 'bg-foreground-950 hover:bg-foreground-800 text-background-50'
                   }`}
                 >
-                  Satın Al / Talep Et
+                  Satın Al — {formatPrice(pkg.price)}
                 </Link>
+                <p className="text-[11px] text-center text-foreground-500 mt-2">
+                  Anında ödeme sayfasına gider · stok sınırlı değil
+                </p>
               </article>
             ))}
           </div>
 
           <div className="mt-12 md:mt-16 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
             {[
-              { icon: 'ri-shield-check-line', title: 'Admin Onayı', text: 'Paket talepleri admin tarafından incelenir; ücretsiz otomatik hak yok' },
-              { icon: 'ri-bank-card-line', title: 'Ödeme Yakında', text: 'iyzico entegrasyonu firma onayı sonrası açılacak' },
-              { icon: 'ri-customer-service-2-line', title: 'Destek', text: 'Paket ve fatura sorularınız için iletişim hattı' },
+              {
+                icon: 'ri-shopping-cart-2-line',
+                title: 'Online sipariş',
+                text: 'Paket seçin, fatura bilgilerini girin ve siparişi tamamlayın',
+              },
+              {
+                icon: 'ri-bank-card-line',
+                title: 'Kart ile ödeme',
+                text: 'iyzico Checkout Form (3D Secure) — firma onayı sonrası canlı tahsilat',
+              },
+              {
+                icon: 'ri-file-list-3-line',
+                title: 'Yasal belgeler',
+                text: 'Mesafeli satış, iade/iptal ve KVKK metinleri ödeme öncesi sunulur',
+              },
             ].map((item) => (
               <div
                 key={item.title}
@@ -103,15 +134,10 @@ export default function PackagesPage() {
           </div>
 
           <p className="text-center text-sm text-foreground-500 mt-10">
-            İlan vermek için önce paket seçin veya{' '}
-            <Link to="/ilan-ekle" className="text-primary-600 hover:underline">
-              ilan formuna
-            </Link>{' '}
-            gidin. Detaylar için{' '}
+            Sipariş sonrası ilan yayınlama hakkınız işveren panelinde görünür.{' '}
             <Link to="/iletisim" className="text-primary-600 hover:underline">
-              iletişime
-            </Link>{' '}
-            geçebilirsiniz.
+              Destek / iletişim
+            </Link>
           </p>
         </section>
       </main>
