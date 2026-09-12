@@ -275,8 +275,13 @@ export default function PostJobPage() {
     );
   }
 
+  const fieldClass =
+    'w-full px-3 py-2.5 rounded-lg border border-background-300 bg-background-50 text-foreground-950 text-sm dark:bg-background-50 dark:border-background-300 dark:text-foreground-950';
+  const cardClass =
+    'rounded-xl border border-background-200 bg-background-100 p-5 space-y-4 text-foreground-950 dark:bg-background-100 dark:border-background-300';
+
   return (
-    <div className="min-h-screen flex flex-col bg-background-50">
+    <div className="min-h-screen flex flex-col bg-background-50 text-foreground-950">
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <div className="max-w-3xl mx-auto px-4 md:px-6">
@@ -284,7 +289,7 @@ export default function PostJobPage() {
             <h1 className="font-heading font-bold text-2xl text-foreground-950">
               {isAdmin ? 'Site İlanı Yayınla' : 'İlan Talebi Gönder'}
             </h1>
-            <p className="text-sm text-foreground-500">
+            <p className="text-sm text-foreground-600">
               {isAdmin
                 ? 'Yönetici ilanı — paket gerekmez, doğrudan yayına alınır.'
                 : `Doğrudan yayınlanmaz. Admin onayından sonra yayınlanır. Kalan hak: ${remaining}`}
@@ -292,26 +297,26 @@ export default function PostJobPage() {
           </div>
 
           {isAdmin ? (
-            <div className="mb-6 p-4 rounded-xl border border-primary-200 bg-primary-50/60 space-y-3">
-              <p className="text-sm font-semibold">Admin yayın ayarları</p>
-              <label className="flex items-center gap-2 text-sm">
+            <div className="mb-6 p-4 rounded-xl border border-primary-300 bg-primary-50/80 dark:bg-primary-950/40 dark:border-primary-800 space-y-3 text-foreground-950">
+              <p className="text-sm font-semibold text-foreground-950">Admin yayın ayarları</p>
+              <label className="flex items-center gap-2 text-sm text-foreground-800">
                 <input type="checkbox" checked={adminFeatured} onChange={(e) => setAdminFeatured(e.target.checked)} />
                 Öne çıkan ilan
               </label>
               <div>
-                <label className="block text-sm mb-1">Yayın süresi (gün)</label>
+                <label className="block text-sm mb-1 text-foreground-800">Yayın süresi (gün)</label>
                 <input
                   type="number"
                   min={1}
                   max={365}
                   value={adminDays}
                   onChange={(e) => setAdminDays(parseInt(e.target.value, 10) || 30)}
-                  className="w-32 rounded-lg border border-background-300 px-3 py-2 text-sm"
+                  className="w-32 rounded-lg border border-background-300 bg-background-50 px-3 py-2 text-sm text-foreground-950"
                 />
               </div>
             </div>
           ) : remaining === 0 ? (
-            <div className="mb-6 p-4 rounded-xl border border-amber-200 bg-amber-50 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+            <div className="mb-6 p-4 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
               <div>
                 <p className="text-sm font-semibold text-foreground-950">Aktif paket hakkınız yok</p>
                 <p className="text-xs text-foreground-600 mt-0.5">
@@ -321,9 +326,13 @@ export default function PostJobPage() {
               <Link to="/paketler" className="shrink-0 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-semibold">Paketleri Gör</Link>
             </div>
           ) : (
-            <div className="mb-6 p-4 rounded-xl border border-primary-200 bg-primary-50/60">
-              <label className="block text-sm font-semibold mb-2">Kullanılacak paket hakkı *</label>
-              <select value={selectedCreditId} onChange={(e) => setSelectedCreditId(e.target.value)} className="w-full rounded-lg border border-background-300 px-3 py-2.5 text-sm">
+            <div className="mb-6 p-4 rounded-xl border border-primary-300 bg-primary-50/80 dark:bg-primary-950/40 dark:border-primary-800 text-foreground-950">
+              <label className="block text-sm font-semibold mb-2 text-foreground-950">Kullanılacak paket hakkı *</label>
+              <select
+                value={selectedCreditId}
+                onChange={(e) => setSelectedCreditId(e.target.value)}
+                className={fieldClass}
+              >
                 {credits.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.package_name} — {c.duration_days} gün{c.featured ? ' · Öne çıkan' : ''} (kalan {c.remaining})
@@ -335,66 +344,66 @@ export default function PostJobPage() {
           )}
 
           {submitResult && (
-            <div className={`mb-6 px-4 py-3 rounded-lg text-sm font-medium ${submitResult.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+            <div className={`mb-6 px-4 py-3 rounded-lg text-sm font-medium ${submitResult.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800' : 'bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800'}`}>
               {submitResult.message}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <section className="bg-white rounded-xl border border-background-200 p-5 space-y-4">
-              <h2 className="font-heading font-bold text-base">Temel Bilgiler</h2>
+            <section className={cardClass}>
+              <h2 className="font-heading font-bold text-base text-foreground-950">Temel Bilgiler</h2>
               <div>
-                <label className="block text-sm font-medium mb-1.5">
+                <label className="block text-sm font-medium mb-1.5 text-foreground-800">
                   İlan Başlığı{isAdmin ? '' : ' *'}
                 </label>
-                <input type="text" value={formData.title} onChange={(e) => updateField('title', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm" />
+                <input type="text" value={formData.title} onChange={(e) => updateField('title', e.target.value)} className={fieldClass} />
                 {formErrors.title && <p className="text-xs text-red-600 mt-1">{formErrors.title}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Kategori</label>
-                <select value={formData.category_id} onChange={(e) => updateField('category_id', parseInt(e.target.value, 10))} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm">
+                <label className="block text-sm font-medium mb-1.5 text-foreground-800">Kategori</label>
+                <select value={formData.category_id} onChange={(e) => updateField('category_id', parseInt(e.target.value, 10))} className={fieldClass}>
                   <option value={0}>Seçiniz</option>
                   {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 {formErrors.category_id && <p className="text-xs text-red-600 mt-1">{formErrors.category_id}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Şirket Adı</label>
-                <input type="text" value={formData.company_name} onChange={(e) => updateField('company_name', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm" />
+                <label className="block text-sm font-medium mb-1.5 text-foreground-800">Şirket Adı</label>
+                <input type="text" value={formData.company_name} onChange={(e) => updateField('company_name', e.target.value)} className={fieldClass} />
                 {formErrors.company_name && <p className="text-xs text-red-600 mt-1">{formErrors.company_name}</p>}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Şehir</label>
-                  <input type="text" value={formData.city} onChange={(e) => updateField('city', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm" />
+                  <label className="block text-sm font-medium mb-1.5 text-foreground-800">Şehir</label>
+                  <input type="text" value={formData.city} onChange={(e) => updateField('city', e.target.value)} className={fieldClass} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Çalışma Tipi</label>
-                  <select value={formData.job_type} onChange={(e) => updateField('job_type', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm">
+                  <label className="block text-sm font-medium mb-1.5 text-foreground-800">Çalışma Tipi</label>
+                  <select value={formData.job_type} onChange={(e) => updateField('job_type', e.target.value)} className={fieldClass}>
                     {JOB_TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Deneyim</label>
-                  <select value={formData.experience_level} onChange={(e) => updateField('experience_level', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm">
+                  <label className="block text-sm font-medium mb-1.5 text-foreground-800">Deneyim</label>
+                  <select value={formData.experience_level} onChange={(e) => updateField('experience_level', e.target.value)} className={fieldClass}>
                     {EXPERIENCE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Öğrenim durumu</label>
-                  <select value={formData.education_level} onChange={(e) => updateField('education_level', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm">
+                  <label className="block text-sm font-medium mb-1.5 text-foreground-800">Öğrenim durumu</label>
+                  <select value={formData.education_level} onChange={(e) => updateField('education_level', e.target.value)} className={fieldClass}>
                     {EDUCATION_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Maaş bilgisi</label>
+                <label className="block text-sm font-medium mb-1.5 text-foreground-800">Maaş bilgisi</label>
                 <select
                   value={formData.salary_type}
                   onChange={(e) => updateField('salary_type', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm mb-3"
+                  className={`${fieldClass} mb-3`}
                 >
                   {SALARY_TYPE_OPTIONS.map((t) => (
                     <option key={t.value} value={t.value}>{t.label}</option>
@@ -403,69 +412,69 @@ export default function PostJobPage() {
                 {formData.salary_type === 'range' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">Min Maaş (TL)</label>
+                      <label className="block text-sm font-medium mb-1.5 text-foreground-800">Min Maaş (TL)</label>
                       <input
                         type="text"
                         inputMode="decimal"
                         placeholder="Örn: 28075"
                         value={formData.salary_min}
                         onChange={(e) => updateField('salary_min', e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                        className={fieldClass}
                       />
                       {formErrors.salary_min && <p className="text-xs text-red-600 mt-1">{formErrors.salary_min}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1.5">Max Maaş (TL)</label>
+                      <label className="block text-sm font-medium mb-1.5 text-foreground-800">Max Maaş (TL)</label>
                       <input
                         type="text"
                         inputMode="decimal"
                         placeholder="Örn: 35000"
                         value={formData.salary_max}
                         onChange={(e) => updateField('salary_max', e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                        className={fieldClass}
                       />
                       {formErrors.salary_max && <p className="text-xs text-red-600 mt-1">{formErrors.salary_max}</p>}
                     </div>
-                    <p className="sm:col-span-2 text-xs text-foreground-500">
+                    <p className="sm:col-span-2 text-xs text-foreground-600">
                       Binlik ayırıcı kullanmayın veya TR formatı yazın (28.075 / 28075). Kuruş yuvarlanır.
                     </p>
                   </div>
                 )}
                 {formData.salary_type === 'asgari' && (
-                  <p className="text-sm text-foreground-600">İlanda &quot;Asgari Ücret&quot; olarak görünecek.</p>
+                  <p className="text-sm text-foreground-700">İlanda &quot;Asgari Ücret&quot; olarak görünecek.</p>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Açıklama</label>
-                <textarea rows={6} value={formData.description} onChange={(e) => updateField('description', e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm resize-none" />
+                <label className="block text-sm font-medium mb-1.5 text-foreground-800">Açıklama</label>
+                <textarea rows={6} value={formData.description} onChange={(e) => updateField('description', e.target.value)} className={`${fieldClass} resize-none`} />
                 {formErrors.description && <p className="text-xs text-red-600 mt-1">{formErrors.description}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">İlan Görseli</label>
-                <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} className="w-full text-sm" />
+                <label className="block text-sm font-medium mb-1.5 text-foreground-800">İlan Görseli</label>
+                <input type="file" accept="image/*" onChange={(e) => setImageFile(e.target.files?.[0] || null)} className="w-full text-sm text-foreground-800" />
               </div>
             </section>
 
-            <section className="bg-white rounded-xl border border-background-200 p-5 space-y-2">
-              <h2 className="font-heading font-bold text-base mb-2">Gereksinimler</h2>
+            <section className={`${cardClass} space-y-2`}>
+              <h2 className="font-heading font-bold text-base mb-2 text-foreground-950">Gereksinimler</h2>
               {requirements.map((r, i) => (
                 <div key={i} className="flex gap-2">
-                  <input type="text" value={r} onChange={(e) => updateRequirement(i, e.target.value)} className="flex-1 px-3 py-2 rounded-lg border border-background-200 text-sm" />
-                  <button type="button" onClick={() => removeRequirement(i)} className="px-2 text-foreground-500"><i className="ri-delete-bin-line" /></button>
+                  <input type="text" value={r} onChange={(e) => updateRequirement(i, e.target.value)} className={`flex-1 ${fieldClass}`} />
+                  <button type="button" onClick={() => removeRequirement(i)} className="px-2 text-foreground-600"><i className="ri-delete-bin-line" /></button>
                 </div>
               ))}
-              <button type="button" onClick={addRequirement} className="text-sm text-primary-600 font-medium">+ Gereksinim ekle</button>
+              <button type="button" onClick={addRequirement} className="text-sm text-primary-600 dark:text-primary-400 font-medium">+ Gereksinim ekle</button>
             </section>
 
-            <section className="bg-white rounded-xl border border-background-200 p-5 space-y-2">
-              <h2 className="font-heading font-bold text-base mb-2">Yan Haklar</h2>
+            <section className={`${cardClass} space-y-2`}>
+              <h2 className="font-heading font-bold text-base mb-2 text-foreground-950">Yan Haklar</h2>
               {benefits.map((b, i) => (
                 <div key={i} className="flex gap-2">
-                  <input type="text" value={b} onChange={(e) => updateBenefit(i, e.target.value)} className="flex-1 px-3 py-2 rounded-lg border border-background-200 text-sm" />
-                  <button type="button" onClick={() => removeBenefit(i)} className="px-2 text-foreground-500"><i className="ri-delete-bin-line" /></button>
+                  <input type="text" value={b} onChange={(e) => updateBenefit(i, e.target.value)} className={`flex-1 ${fieldClass}`} />
+                  <button type="button" onClick={() => removeBenefit(i)} className="px-2 text-foreground-600"><i className="ri-delete-bin-line" /></button>
                 </div>
               ))}
-              <button type="button" onClick={addBenefit} className="text-sm text-primary-600 font-medium">+ Yan hak ekle</button>
+              <button type="button" onClick={addBenefit} className="text-sm text-primary-600 dark:text-primary-400 font-medium">+ Yan hak ekle</button>
             </section>
 
             <div className="flex flex-col sm:flex-row gap-3">
@@ -480,7 +489,7 @@ export default function PostJobPage() {
                     ? 'İlanı Yayınla'
                     : 'Admin Onayına Gönder'}
               </button>
-              <Link to={isAdmin ? '/admin' : '/profil/isveren'} className="px-6 py-3 border border-background-300 font-semibold text-sm rounded-xl text-center">
+              <Link to={isAdmin ? '/admin' : '/profil/isveren'} className="px-6 py-3 border border-background-300 font-semibold text-sm rounded-xl text-center text-foreground-950 dark:border-background-400">
                 {isAdmin ? 'Admin Paneline Dön' : 'Profile Dön'}
               </Link>
             </div>
