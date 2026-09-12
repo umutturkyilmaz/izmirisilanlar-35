@@ -122,7 +122,7 @@ export default function Navbar() {
             alt={t('brand')}
             className="h-10 w-auto object-contain"
           />
-          <span className="hidden sm:block font-heading font-bold text-lg md:text-xl text-foreground-950">
+          <span className="hidden sm:block font-heading font-bold text-lg md:text-xl text-foreground-950 dark:text-white">
             {t('brand')}
           </span>
         </Link>
@@ -136,7 +136,7 @@ export default function Navbar() {
               className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                 isActive(link.path)
                   ? 'text-primary-700 bg-primary-100 dark:text-primary-300 dark:bg-primary-900/40'
-                  : 'text-foreground-800 hover:text-primary-700 hover:bg-background-100 dark:text-foreground-200 dark:hover:text-primary-300 dark:hover:bg-background-200'
+                  : 'text-foreground-800 hover:text-primary-700 hover:bg-background-100 dark:text-white/90 dark:hover:text-primary-300 dark:hover:bg-background-200'
               }`}
             >
               {link.label}
@@ -150,7 +150,7 @@ export default function Navbar() {
           {/* Dark Mode Toggle */}
           <button
             onClick={toggleDark}
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-foreground-700 hover:bg-background-200 transition-colors dark:text-foreground-200"
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-foreground-800 hover:bg-background-200 transition-colors dark:text-white dark:hover:bg-background-200"
             aria-label={isDark ? t('common.lightMode') : t('common.darkMode')}
           >
             {isDark ? (
@@ -171,17 +171,17 @@ export default function Navbar() {
                   <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold text-sm">
                     {profile.full_name?.charAt(0)?.toUpperCase() || 'K'}
                   </div>
-                  <span className="text-sm font-medium text-foreground-800 max-w-[100px] truncate dark:text-foreground-200">
+                  <span className="text-sm font-medium text-foreground-800 max-w-[100px] truncate dark:text-white">
                     {profile.full_name || 'Kullanıcı'}
                   </span>
-                  <i className={`${isProfileMenuOpen ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} text-foreground-500 text-sm`} />
+                  <i className={`${isProfileMenuOpen ? 'ri-arrow-up-s-line' : 'ri-arrow-down-s-line'} text-foreground-500 text-sm dark:text-white/70`} />
                 </button>
 
                 {isProfileMenuOpen && (
                   <div className="absolute right-0 top-full mt-1 w-56 bg-background-50 dark:bg-background-100 rounded-xl border border-background-200 dark:border-background-200 shadow-lg py-1 z-50">
                     <div className="px-4 py-2 border-b border-background-200">
-                      <p className="text-sm font-medium text-foreground-950">{profile.full_name}</p>
-                      <p className="text-xs text-foreground-500">
+                      <p className="text-sm font-medium text-foreground-950 dark:text-white">{profile.full_name}</p>
+                      <p className="text-xs text-foreground-500 dark:text-white/60">
                         {profile.role === 'admin'
                           ? 'Yönetici'
                           : profile.role === 'employer'
@@ -192,7 +192,7 @@ export default function Navbar() {
                     <Link
                       to={profilePath}
                       onClick={() => setIsProfileMenuOpen(false)}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-800 hover:bg-background-100 dark:text-white dark:hover:bg-background-200 transition-colors"
                     >
                       <i className="ri-user-line text-base" />
                       {t('nav.profile')}
@@ -202,7 +202,7 @@ export default function Navbar() {
                         <Link
                           to="/ilanlarim"
                           onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-800 hover:bg-background-100 dark:text-white dark:hover:bg-background-200 transition-colors"
                         >
                           <i className="ri-briefcase-line text-base" />
                           İlanlarım
@@ -210,7 +210,7 @@ export default function Navbar() {
                         <Link
                           to="/ilan-ekle"
                           onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-800 hover:bg-background-100 dark:text-white dark:hover:bg-background-200 transition-colors"
                         >
                           <i className="ri-file-add-line text-base" />
                           İlan Talebi
@@ -218,7 +218,7 @@ export default function Navbar() {
                         <Link
                           to="/paketler"
                           onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-800 hover:bg-background-100 dark:text-white dark:hover:bg-background-200 transition-colors"
                         >
                           <i className="ri-price-tag-3-line text-base" />
                           Paketler
@@ -230,7 +230,7 @@ export default function Navbar() {
                         <Link
                           to="/basvurularim"
                           onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-800 hover:bg-background-100 dark:text-white dark:hover:bg-background-200 transition-colors"
                         >
                           <i className="ri-file-list-line text-base" />
                           {t('nav.myApplications')}
@@ -238,7 +238,7 @@ export default function Navbar() {
                         <Link
                           to="/favorilerim"
                           onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-800 hover:bg-background-100 dark:text-white dark:hover:bg-background-200 transition-colors"
                         >
                           <i className="ri-heart-line text-base" />
                           {t('nav.favorites')}
@@ -250,7 +250,7 @@ export default function Navbar() {
                         <Link
                           to="/admin"
                           onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-800 hover:bg-background-100 dark:text-white dark:hover:bg-background-200 transition-colors"
                         >
                           <i className="ri-admin-line text-base" />
                           {t('nav.admin')}
@@ -258,7 +258,7 @@ export default function Navbar() {
                         <Link
                           to="/ilan-ekle"
                           onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-700 hover:bg-background-100 dark:hover:bg-background-200 transition-colors"
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-800 hover:bg-background-100 dark:text-white dark:hover:bg-background-200 transition-colors"
                         >
                           <i className="ri-add-circle-line text-base" />
                           Site İlanı Yayınla
@@ -303,7 +303,7 @@ export default function Navbar() {
               <div className="hidden md:flex items-center gap-2">
                 <Link
                   to="/giris"
-                  className="px-4 py-2 text-sm font-medium text-foreground-700 hover:text-primary-600 transition-colors whitespace-nowrap"
+                  className="px-4 py-2 text-sm font-medium text-foreground-800 hover:text-primary-600 transition-colors whitespace-nowrap dark:text-white dark:hover:text-primary-300"
                 >
                   {t('nav.login')}
                 </Link>
@@ -329,7 +329,7 @@ export default function Navbar() {
           {/* Mobile Menu Toggle */}
           <button
             onClick={toggleMobile}
-            className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center text-foreground-700 hover:bg-background-200 transition-colors"
+            className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center text-foreground-800 hover:bg-background-200 transition-colors dark:text-white"
             aria-label="Menü"
           >
             <i className={`ri-${isMobileMenuOpen ? 'close' : 'menu'}-line text-xl`} />
@@ -348,8 +348,8 @@ export default function Navbar() {
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   isActive(link.path)
-                    ? 'text-primary-600 bg-primary-50/60 dark:text-primary-400 dark:bg-primary-900/20'
-                    : 'text-foreground-700 hover:bg-background-200 dark:text-foreground-700'
+                    ? 'text-primary-600 bg-primary-50/60 dark:text-primary-300 dark:bg-primary-900/20'
+                    : 'text-foreground-800 hover:bg-background-200 dark:text-white dark:hover:bg-background-200'
                 }`}
               >
                 {link.label}
@@ -361,7 +361,7 @@ export default function Navbar() {
                 <Link
                   to={profilePath}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                  className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-800 hover:bg-background-200 transition-colors dark:text-white dark:hover:bg-background-200"
                 >
                   <i className="ri-user-line mr-2" />
                   {t('nav.profile')}
@@ -371,7 +371,7 @@ export default function Navbar() {
                     <Link
                       to="/ilanlarim"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-800 hover:bg-background-200 transition-colors dark:text-white dark:hover:bg-background-200"
                     >
                       <i className="ri-briefcase-line mr-2" />
                       İlanlarım
@@ -379,7 +379,7 @@ export default function Navbar() {
                     <Link
                       to="/ilan-ekle"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-800 hover:bg-background-200 transition-colors dark:text-white dark:hover:bg-background-200"
                     >
                       <i className="ri-file-add-line mr-2" />
                       İlan Talebi
@@ -387,7 +387,7 @@ export default function Navbar() {
                     <Link
                       to="/paketler"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-800 hover:bg-background-200 transition-colors dark:text-white dark:hover:bg-background-200"
                     >
                       <i className="ri-price-tag-3-line mr-2" />
                       Paketler
@@ -399,7 +399,7 @@ export default function Navbar() {
                     <Link
                       to="/basvurularim"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-800 hover:bg-background-200 transition-colors dark:text-white dark:hover:bg-background-200"
                     >
                       <i className="ri-file-list-line mr-2" />
                       {t('nav.myApplications')}
@@ -407,7 +407,7 @@ export default function Navbar() {
                     <Link
                       to="/favorilerim"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-800 hover:bg-background-200 transition-colors dark:text-white dark:hover:bg-background-200"
                     >
                       <i className="ri-heart-line mr-2" />
                       {t('nav.favorites')}
@@ -419,7 +419,7 @@ export default function Navbar() {
                     <Link
                       to="/admin"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-800 hover:bg-background-200 transition-colors dark:text-white dark:hover:bg-background-200"
                     >
                       <i className="ri-admin-line mr-2" />
                       {t('nav.admin')}
@@ -427,7 +427,7 @@ export default function Navbar() {
                     <Link
                       to="/ilan-ekle"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                      className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-800 hover:bg-background-200 transition-colors dark:text-white dark:hover:bg-background-200"
                     >
                       <i className="ri-add-circle-line mr-2" />
                       Site İlanı Yayınla
@@ -447,7 +447,7 @@ export default function Navbar() {
                 <Link
                   to="/giris"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-700 hover:bg-background-200 transition-colors"
+                  className="px-3 py-2.5 rounded-lg text-sm font-medium text-foreground-800 hover:bg-background-200 transition-colors dark:text-white dark:hover:bg-background-200"
                 >
                   {t('nav.login')}
                 </Link>

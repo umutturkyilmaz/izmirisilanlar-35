@@ -67,6 +67,14 @@ const server = http.createServer((req, res) => {
     return send(res, 405, 'Method Not Allowed', { Allow: 'GET, HEAD' });
   }
 
+  // www → apex (Railway + Cloudflare)
+  const host = String(req.headers.host || '').toLowerCase().split(':')[0];
+  if (host === 'www.izmirisilanlari35.com') {
+    const target = `https://izmirisilanlari35.com${req.url || '/'}`;
+    res.writeHead(301, { Location: target, 'Cache-Control': 'public, max-age=3600' });
+    return res.end();
+  }
+
   const urlPath = req.url || '/';
   const pathname = urlPath.split('?')[0];
   const isAssetPath = pathname.includes('/assets/') || STATIC_EXT.test(pathname);

@@ -193,9 +193,16 @@ UPDATE users SET role = 'admin' WHERE email = 'senin@email.com';
 ## ADIM 8 — Özel domain (izmirisilanlari35.com)
 
 Web servisi → **Settings** → **Networking** → **Custom Domain**  
-`izmirisilanlari35.com` ekle → Railway'in verdiği CNAME'yi Cloudflare'e yaz.
+`izmirisilanlari35.com` **ve** `www.izmirisilanlari35.com` ekle.
 
-Cloudflare: turuncu bulut (Proxied) + SSL **Full**.
+Cloudflare DNS:
+- apex (`izmirisilanlari35.com`): Railway’in verdiği kayıt (CNAME/A)
+- `www`: **CNAME** → `pz15p54y.up.railway.app` (turuncu Proxied)  
+  veya Redirect Rule: `www` → `https://izmirisilanlari35.com`
+
+Cloudflare SSL: **Full**.
+
+www Railway’de yoksa `x-railway-fallback: true` + 404 görürsünüz.
 
 ---
 
