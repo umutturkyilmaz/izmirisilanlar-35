@@ -202,23 +202,28 @@ export default function EditJobPage() {
 
   const backHref = fromAdmin ? '/admin' : '/profil/isveren';
   const backLabel = fromAdmin ? '← Admin paneline dön' : '← İlanlarıma dön';
-  const inputCls = 'w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm';
+  const inputCls =
+    'w-full px-3 py-2.5 rounded-lg border border-background-300 bg-background-100 text-foreground-950 text-sm placeholder:text-foreground-400 focus:outline-none focus:ring-2 focus:ring-primary-400';
+  const labelCls = 'block text-sm font-medium mb-1.5 text-foreground-800';
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-background-50 text-foreground-950">
       <Navbar />
       <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
         <div className="max-w-2xl mx-auto px-4">
-          <Link to={backHref} className="text-sm text-primary-600 hover:underline">
+          <Link to={backHref} className="text-sm text-primary-600 dark:text-primary-400 hover:underline">
             {backLabel}
           </Link>
-          <h1 className="font-heading text-2xl font-bold mt-3 mb-6">İlanı Düzenle</h1>
+          <h1 className="font-heading text-2xl font-bold mt-3 mb-6 text-foreground-950">İlanı Düzenle</h1>
           {loadErr ? (
-            <p className="text-sm text-red-600">{loadErr}</p>
+            <p className="text-sm text-red-600 dark:text-red-400">{loadErr}</p>
           ) : (
-            <form onSubmit={save} className="space-y-4 bg-background-50 border border-background-200 rounded-xl p-5">
+            <form
+              onSubmit={save}
+              className="space-y-4 rounded-xl border border-background-200 bg-background-100 p-5 text-foreground-950"
+            >
               <div>
-                <label className="block text-sm font-medium mb-1.5">Görsel</label>
+                <label className={labelCls}>Görsel</label>
                 <div className="flex items-start gap-4">
                   <div className="w-28 h-28 rounded-lg overflow-hidden border border-background-200 shrink-0">
                     <JobImage
@@ -231,7 +236,7 @@ export default function EditJobPage() {
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp"
-                      className="block w-full text-sm"
+                      className="block w-full text-sm text-foreground-800"
                       onChange={(e) => setImageFile(e.target.files?.[0] || null)}
                     />
                     <p className="text-xs text-foreground-500 mt-1">JPG, PNG veya WebP — max 8 MB</p>
@@ -239,7 +244,7 @@ export default function EditJobPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Başlık</label>
+                <label className={labelCls}>Başlık</label>
                 <input
                   className={inputCls}
                   value={form.title}
@@ -247,7 +252,7 @@ export default function EditJobPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Şirket</label>
+                <label className={labelCls}>Şirket</label>
                 <input
                   className={inputCls}
                   value={form.company_name}
@@ -255,7 +260,7 @@ export default function EditJobPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">İş alanı / Kategori</label>
+                <label className={labelCls}>İş alanı / Kategori</label>
                 <select
                   className={inputCls}
                   value={form.category_id || ''}
@@ -280,7 +285,7 @@ export default function EditJobPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Şehir</label>
+                  <label className={labelCls}>Şehir</label>
                   <input
                     className={inputCls}
                     value={form.city}
@@ -288,7 +293,7 @@ export default function EditJobPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Çalışma tipi</label>
+                  <label className={labelCls}>Çalışma tipi</label>
                   <select
                     className={inputCls}
                     value={form.job_type}
@@ -302,7 +307,7 @@ export default function EditJobPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Deneyim</label>
+                  <label className={labelCls}>Deneyim</label>
                   <select
                     className={inputCls}
                     value={form.experience_level}
@@ -314,7 +319,7 @@ export default function EditJobPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Öğrenim durumu</label>
+                  <label className={labelCls}>Öğrenim durumu</label>
                   <select
                     className={inputCls}
                     value={form.education_level}
@@ -327,7 +332,7 @@ export default function EditJobPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Maaş bilgisi</label>
+                <label className={labelCls}>Maaş bilgisi</label>
                 <select
                   className={inputCls}
                   value={form.salary_type}
@@ -341,7 +346,7 @@ export default function EditJobPage() {
               {form.salary_type === 'range' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Min maaş (TL)</label>
+                  <label className={labelCls}>Min maaş (TL)</label>
                   <input
                     className={inputCls}
                     placeholder="28075"
@@ -350,7 +355,7 @@ export default function EditJobPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Max maaş (TL)</label>
+                  <label className={labelCls}>Max maaş (TL)</label>
                   <input
                     className={inputCls}
                     placeholder="35000"
@@ -363,7 +368,7 @@ export default function EditJobPage() {
               {isAdmin && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium mb-1.5">Durum</label>
+                    <label className={labelCls}>Durum</label>
                     <select
                       className={inputCls}
                       value={form.status}
@@ -375,7 +380,7 @@ export default function EditJobPage() {
                     </select>
                   </div>
                   <div className="flex items-end pb-1">
-                    <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
+                    <label className="inline-flex items-center gap-2 text-sm text-foreground-800 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={form.featured}
@@ -387,20 +392,20 @@ export default function EditJobPage() {
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium mb-1.5">Açıklama</label>
+                <label className={labelCls}>Açıklama</label>
                 <textarea
                   rows={8}
-                  className={inputCls}
+                  className={`${inputCls} resize-y`}
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                 />
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-sm font-medium">Gereksinimler</label>
+                  <label className="text-sm font-medium text-foreground-800">Gereksinimler</label>
                   <button
                     type="button"
-                    className="text-xs text-primary-600"
+                    className="text-xs text-primary-600 dark:text-primary-400"
                     onClick={() => setRequirements((p) => [...p, ''])}
                   >
                     + Ekle
@@ -429,10 +434,10 @@ export default function EditJobPage() {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-sm font-medium">Yan haklar</label>
+                  <label className="text-sm font-medium text-foreground-800">Yan haklar</label>
                   <button
                     type="button"
-                    className="text-xs text-primary-600"
+                    className="text-xs text-primary-600 dark:text-primary-400"
                     onClick={() => setBenefits((p) => [...p, ''])}
                   >
                     + Ekle

@@ -63,7 +63,7 @@ export default function ForgotPasswordPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg border border-background-200 bg-background-100 text-sm outline-none focus:ring-2 focus:ring-primary-400"
+                className="w-full px-3 py-2.5 rounded-lg border border-background-300 bg-background-100 text-foreground-950 text-sm outline-none focus:ring-2 focus:ring-primary-400"
               />
             </div>
             <button
@@ -75,7 +75,7 @@ export default function ForgotPasswordPage() {
             </button>
           </form>
           <p className="text-center text-sm text-foreground-600 mt-5">
-            <Link to="/giris" className="text-primary-600 hover:underline">
+            <Link to="/giris" className="text-primary-600 dark:text-primary-400 hover:underline">
               Girişe dön
             </Link>
           </p>

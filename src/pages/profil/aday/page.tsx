@@ -321,7 +321,7 @@ export default function CandidateProfilePage() {
                     <select
                       value={form.education_level}
                       onChange={(e) => setForm({ ...form, education_level: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-background-100 border border-background-200 text-sm"
+                      className="w-full px-3 py-2 rounded-lg bg-background-100 dark:bg-background-50 border border-background-200 text-sm text-foreground-950"
                     >
                       <option value="">Seçiniz</option>
                       {EDUCATION_OPTIONS.map((o) => (
@@ -336,7 +336,7 @@ export default function CandidateProfilePage() {
                     <select
                       value={form.experience_level}
                       onChange={(e) => setForm({ ...form, experience_level: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-background-100 border border-background-200 text-sm"
+                      className="w-full px-3 py-2 rounded-lg bg-background-100 dark:bg-background-50 border border-background-200 text-sm text-foreground-950"
                     >
                       <option value="">Seçiniz</option>
                       {EXPERIENCE_OPTIONS.map((o) => (
@@ -354,7 +354,7 @@ export default function CandidateProfilePage() {
                       type="password"
                       value={pwdForm.current}
                       onChange={(e) => setPwdForm({ ...pwdForm, current: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-background-100 border border-background-200 text-sm"
+                      className="w-full px-3 py-2 rounded-lg bg-background-100 dark:bg-background-50 border border-background-200 text-sm text-foreground-950"
                     />
                   </div>
                   <div>
@@ -363,7 +363,7 @@ export default function CandidateProfilePage() {
                       type="password"
                       value={pwdForm.next}
                       onChange={(e) => setPwdForm({ ...pwdForm, next: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg bg-background-100 border border-background-200 text-sm"
+                      className="w-full px-3 py-2 rounded-lg bg-background-100 dark:bg-background-50 border border-background-200 text-sm text-foreground-950"
                     />
                   </div>
                 </div>
@@ -371,7 +371,7 @@ export default function CandidateProfilePage() {
                 <button
                   type="button"
                   onClick={() => void handleChangePassword()}
-                  className="text-sm text-primary-600 hover:underline"
+                  className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
                 >
                   Şifreyi güncelle
                 </button>

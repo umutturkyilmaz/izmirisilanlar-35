@@ -70,25 +70,25 @@ export default function ResetPasswordPage() {
           )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5">Yeni şifre</label>
+              <label className="block text-sm font-medium mb-1.5 text-foreground-800">Yeni şifre</label>
               <input
                 type="password"
                 required
                 minLength={6}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                className="w-full px-3 py-2.5 rounded-lg border border-background-300 bg-background-100 text-foreground-950 text-sm"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">Şifre tekrar</label>
+              <label className="block text-sm font-medium mb-1.5 text-foreground-800">Şifre tekrar</label>
               <input
                 type="password"
                 required
                 minLength={6}
                 value={password2}
                 onChange={(e) => setPassword2(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg border border-background-200 text-sm"
+                className="w-full px-3 py-2.5 rounded-lg border border-background-300 bg-background-100 text-foreground-950 text-sm"
               />
             </div>
             <button

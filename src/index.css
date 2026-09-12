@@ -77,6 +77,8 @@
   }
 
   .dark {
+    color-scheme: dark;
+
     --background-50: 0.12 0.01 260;
     --background-100: 0.15 0.01 260;
     --background-200: 0.2 0.02 260;
@@ -114,6 +116,54 @@
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
+    color: oklch(var(--foreground-950));
+  }
+
+  label {
+    color: oklch(var(--foreground-800));
+  }
+
+  /* Form kontrolleri: tarayıcı varsayılanı (beyaz kutu / siyah yazı) gece modunu bozmasın */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='hidden']):not([type='submit']):not([type='button']):not([type='image']),
+  textarea,
+  select {
+    background-color: oklch(var(--background-100));
+    color: oklch(var(--foreground-950));
+    border-color: oklch(var(--background-300));
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: oklch(var(--foreground-400));
+    opacity: 1;
+  }
+
+  select option {
+    background-color: oklch(var(--background-100));
+    color: oklch(var(--foreground-950));
+  }
+
+  input[type='file'] {
+    color: oklch(var(--foreground-800));
+  }
+
+  /* Gece modunda düz beyaz yüzeyler okunaksız kalmasın */
+  .dark .bg-white {
+    background-color: oklch(var(--background-100));
+  }
+
+  /* Turuncu link/metin gece modunda daha açık */
+  .dark .text-primary-600 {
+    color: oklch(var(--primary-400));
+  }
+  .dark .text-primary-700 {
+    color: oklch(var(--primary-300));
+  }
+  .dark .hover\:text-primary-600:hover {
+    color: oklch(var(--primary-400));
+  }
+  .dark .hover\:text-primary-700:hover {
+    color: oklch(var(--primary-300));
   }
 }
 
