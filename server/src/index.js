@@ -186,6 +186,25 @@ async function ensureSchema() {
   } catch (e) {
     console.warn('slug backfill', e.message);
   }
+  // Eksik kategorileri ekle (ör. Gida)
+  try {
+    await pool.query(
+      `INSERT IGNORE INTO job_categories (name, icon, sort_order) VALUES
+        ('Teknoloji', 'ri-code-s-slash-line', 1),
+        ('Satis & Pazarlama', 'ri-megaphone-line', 2),
+        ('Muhasebe & Finans', 'ri-money-dollar-circle-line', 3),
+        ('Insan Kaynaklari', 'ri-team-line', 4),
+        ('Uretim', 'ri-building-2-line', 5),
+        ('Lojistik', 'ri-truck-line', 6),
+        ('Saglik', 'ri-heart-pulse-line', 7),
+        ('Egitim', 'ri-book-open-line', 8),
+        ('Turizm & Otelcilik', 'ri-hotel-line', 9),
+        ('Gıda', 'ri-restaurant-2-line', 10),
+        ('Diger', 'ri-briefcase-line', 99)`,
+    );
+  } catch (e) {
+    console.warn('category seed', e.message);
+  }
   await cleanupSmokeTestUsers();
 }
 

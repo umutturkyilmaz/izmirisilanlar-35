@@ -8,4 +8,5 @@ INSERT IGNORE INTO job_categories (name, icon, sort_order) VALUES
   ('Saglik', 'ri-heart-pulse-line', 7),
   ('Egitim', 'ri-book-open-line', 8),
   ('Turizm & Otelcilik', 'ri-hotel-line', 9),
+  ('Gıda', 'ri-restaurant-2-line', 10),
   ('Diger', 'ri-briefcase-line', 99);
