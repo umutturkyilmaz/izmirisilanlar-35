@@ -33,7 +33,7 @@ export default function PostJobPage() {
   const [selectedCreditId, setSelectedCreditId] = useState('');
   const isAdmin = profile?.role === 'admin';
   const [adminFeatured, setAdminFeatured] = useState(false);
-  const [adminDays, setAdminDays] = useState(30);
+  const [adminDays, setAdminDays] = useState('30');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     title: '',
@@ -123,6 +123,10 @@ export default function PostJobPage() {
     const errors: Record<string, string> = {};
     if (isAdmin) {
       if (!formData.title.trim()) errors.title = 'İlan başlığı girin';
+      const days = Number.parseInt(adminDays.replace(/\D/g, ''), 10);
+      if (!Number.isFinite(days) || days < 1) {
+        errors.adminDays = 'Yayın süresi en az 1 gün olmalı (istediğiniz gün sayısını yazın)';
+      }
       setFormErrors(errors);
       return Object.keys(errors).length === 0;
     }
@@ -166,6 +170,9 @@ export default function PostJobPage() {
       const catId = Number(formData.category_id);
       const categoryId = Number.isFinite(catId) && catId > 0 ? catId : null;
       const selectedCategory = categories.find((c) => c.id === categoryId);
+      const adminDurationDays = isAdmin
+        ? Number.parseInt(adminDays.replace(/\D/g, ''), 10)
+        : undefined;
 
       await api('/api/jobs', {
         body: {
@@ -189,12 +196,12 @@ export default function PostJobPage() {
           image_url: imageUrl,
           status: isAdmin ? 'active' : 'pending',
           featured: isAdmin ? adminFeatured : false,
-          duration_days: isAdmin ? adminDays : undefined,
+          duration_days: isAdmin ? adminDurationDays : undefined,
         },
       });
 
       const selectedCredit = credits.find((c) => c.id === selectedCreditId);
-      const days = isAdmin ? adminDays : selectedCredit?.duration_days || 7;
+      const days = isAdmin ? adminDurationDays : selectedCredit?.duration_days || 7;
 
       setSubmitResult({
         type: 'success',
@@ -306,13 +313,30 @@ export default function PostJobPage() {
               <div>
                 <label className="block text-sm mb-1 text-foreground-800">Yayın süresi (gün)</label>
                 <input
-                  type="number"
-                  min={1}
-                  max={365}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="Örn: 30"
                   value={adminDays}
-                  onChange={(e) => setAdminDays(parseInt(e.target.value, 10) || 30)}
-                  className="w-32 rounded-lg border border-background-300 bg-background-50 px-3 py-2 text-sm text-foreground-950"
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^\d]/g, '');
+                    setAdminDays(raw);
+                    if (formErrors.adminDays) {
+                      setFormErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.adminDays;
+                        return next;
+                      });
+                    }
+                  }}
+                  className="w-40 rounded-lg border border-background-300 bg-background-50 px-3 py-2 text-sm text-foreground-950"
                 />
+                <p className="text-xs text-foreground-600 mt-1">
+                  İstediğiniz gün sayısını yazın (üst sınır yok). Boş bırakılamaz.
+                </p>
+                {formErrors.adminDays && (
+                  <p className="text-xs text-red-600 mt-1">{formErrors.adminDays}</p>
+                )}
               </div>
             </div>
           ) : remaining === 0 ? (

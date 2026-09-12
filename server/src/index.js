@@ -1012,7 +1012,7 @@ app.post('/api/jobs', auth, async (req, res) => {
     }
 
     if (isAdmin && !b.credit_id) {
-      const days = Number(b.duration_days) || 30;
+      const days = Math.max(1, Math.floor(Number(b.duration_days)) || 30);
       expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     }
 
@@ -1186,7 +1186,7 @@ app.post('/api/jobs/:id/renew', auth, async (req, res) => {
     let usedCreditId = job.credit_id || null;
 
     if (isAdmin && !creditId) {
-      const days = Number(req.body?.duration_days) || 30;
+      const days = Math.max(1, Math.floor(Number(req.body?.duration_days)) || 30);
       expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
       if (req.body?.featured !== undefined) featured = Boolean(req.body.featured);
     } else {
