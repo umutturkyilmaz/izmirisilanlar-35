@@ -193,16 +193,24 @@ UPDATE users SET role = 'admin' WHERE email = 'senin@email.com';
 ## ADIM 8 — Özel domain (izmirisilanlari35.com)
 
 Web servisi → **Settings** → **Networking** → **Custom Domain**  
-`izmirisilanlari35.com` **ve** `www.izmirisilanlari35.com` ekle.
+Yalnızca apex ekle: `izmirisilanlari35.com`  
+(Trial/Hobby’de domain limiti var; `www` Railway’de ayrı domain olarak **çalışmayabilir** → 404 `Application not found`.)
 
-Cloudflare DNS:
-- apex (`izmirisilanlari35.com`): Railway’in verdiği kayıt (CNAME/A)
-- `www`: **CNAME** → `pz15p54y.up.railway.app` (turuncu Proxied)  
-  veya Redirect Rule: `www` → `https://izmirisilanlari35.com`
+### Cloudflare DNS
+- `izmirisilanlari35.com` → CNAME → `….up.railway.app` (Proxied)
+- `www` → CNAME → `@` **veya** aynı `….up.railway.app` (Proxied)
 
-Cloudflare SSL: **Full**.
+### www yönlendirme (zorunlu — ücretsiz)
+Cloudflare → **Rules** → **Redirect Rules** → Create rule:
 
-www Railway’de yoksa `x-railway-fallback: true` + 404 görürsünüz.
+- If: Hostname equals `www.izmirisilanlari35.com`
+- Then: Dynamic redirect → `concat("https://izmirisilanlari35.com", http.request.uri.path)`  
+  veya Static → `https://izmirisilanlari35.com` + Preserve path/query
+- Status: **301**
+
+SSL/TLS: **Full**
+
+Railway paneline `www` eklemene gerek yok; yönlendirme Cloudflare’de olur.
 
 ---
 

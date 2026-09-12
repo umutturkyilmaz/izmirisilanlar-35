@@ -205,6 +205,18 @@ async function ensureSchema() {
   } catch (e) {
     console.warn('category seed', e.message);
   }
+  // category_id dolu olan ilanlarda sector'ü kategori adıyla hizala
+  try {
+    await pool.query(
+      `UPDATE jobs j
+       INNER JOIN job_categories c ON c.id = j.category_id
+       SET j.sector = c.name
+       WHERE j.category_id IS NOT NULL
+         AND (j.sector IS NULL OR j.sector <> c.name)`,
+    );
+  } catch (e) {
+    console.warn('sector sync', e.message);
+  }
   await cleanupSmokeTestUsers();
 }
 
@@ -922,39 +934,44 @@ app.get('/api/jobs', optionalAuth, async (req, res) => {
 
     if (employer_id) {
       const canSeeAll = isAdmin || (uid && String(employer_id) === String(uid));
-      where.push('employer_id = :employer_id');
+      where.push('j.employer_id = :employer_id');
       params.employer_id = employer_id;
       if (!canSeeAll) {
-        where.push(`status = 'active'`);
+        where.push(`j.status = 'active'`);
       } else if (status) {
-        where.push('status = :status');
+        where.push('j.status = :status');
         params.status = status;
       }
     } else if (status) {
-      where.push('status = :status');
+      where.push('j.status = :status');
       params.status = status;
     } else if (!isAdmin) {
-      where.push(`(status = 'active' OR employer_id = :viewer)`);
+      where.push(`(j.status = 'active' OR j.employer_id = :viewer)`);
       params.viewer = uid || '__none__';
     }
-    if (featured === '1' || featured === 'true') where.push('featured = 1');
+    if (featured === '1' || featured === 'true') where.push('j.featured = 1');
     if (city) {
-      where.push('city LIKE :city');
+      where.push('j.city LIKE :city');
       params.city = `%${city}%`;
     }
     if (sector) {
-      where.push('sector LIKE :sector');
+      where.push('(COALESCE(c.name, j.sector) LIKE :sector)');
       params.sector = `%${sector}%`;
     }
     if (job_type) {
-      where.push('job_type = :job_type');
+      where.push('j.job_type = :job_type');
       params.job_type = job_type;
     }
     if (q) {
-      where.push('(title LIKE :q OR company_name LIKE :q OR description LIKE :q)');
+      where.push('(j.title LIKE :q OR j.company_name LIKE :q OR j.description LIKE :q)');
       params.q = `%${q}%`;
     }
-    const sql = `SELECT * FROM jobs ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC LIMIT ${Math.min(Number(limit) || 50, 200)}`;
+    const sql = `SELECT j.*, COALESCE(c.name, j.sector) AS sector
+      FROM jobs j
+      LEFT JOIN job_categories c ON c.id = j.category_id
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+      ORDER BY j.created_at DESC
+      LIMIT ${Math.min(Number(limit) || 50, 200)}`;
     const [rows] = await pool.query(sql, params);
     const jobs = rows.map(parseJob);
     await sanitizeJobImages(jobs);
@@ -987,7 +1004,11 @@ app.get('/api/jobs/stats', async (_req, res) => {
 app.get('/api/jobs/:id', optionalAuth, async (req, res) => {
   const key = req.params.id;
   const [rows] = await pool.query(
-    'SELECT * FROM jobs WHERE id = :id OR slug = :id LIMIT 1',
+    `SELECT j.*, COALESCE(c.name, j.sector) AS sector
+     FROM jobs j
+     LEFT JOIN job_categories c ON c.id = j.category_id
+     WHERE j.id = :id OR j.slug = :id
+     LIMIT 1`,
     { id: key },
   );
   const job = rows[0];
@@ -1056,6 +1077,11 @@ app.post('/api/jobs', auth, async (req, res) => {
 
     const id = uid();
     const slug = makeJobSlug(title, id);
+    let sectorName = b.sector || null;
+    if (categoryId) {
+      const [cats] = await conn.query('SELECT name FROM job_categories WHERE id = ? LIMIT 1', [categoryId]);
+      if (cats[0]?.name) sectorName = cats[0].name;
+    }
     await conn.query(
       `INSERT INTO jobs
       (id, employer_id, title, category_id, sector, description, company_name, city, job_type, experience_level,
@@ -1068,7 +1094,7 @@ app.post('/api/jobs', auth, async (req, res) => {
         employer_id: req.user.id,
         title,
         category_id: categoryId,
-        sector: b.sector || null,
+        sector: sectorName,
         description: b.description || null,
         company_name: b.company_name || (isAdmin ? 'İzmir İş İlanları 35' : null),
         city: b.city || null,
@@ -1148,6 +1174,17 @@ app.patch('/api/jobs/:id', auth, async (req, res) => {
       params[key] = v;
     }
   }
+  // Kategori seçildiyse iş alanı (sector) her zaman kategori adıyla senkron
+  if (req.body.category_id !== undefined) {
+    const n = Number(req.body.category_id);
+    if (Number.isFinite(n) && n > 0) {
+      const [cats] = await pool.query('SELECT name FROM job_categories WHERE id = ? LIMIT 1', [n]);
+      if (cats[0]?.name) {
+        if (!sets.some((s) => s.startsWith('sector'))) sets.push('sector = :sector');
+        params.sector = cats[0].name;
+      }
+    }
+  }
   const salaryType = req.body.salary_type !== undefined ? req.body.salary_type : job.salary_type;
   if (salaryType === 'asgari' || salaryType === 'gizli') {
     if (!sets.some((s) => s.startsWith('salary_min'))) sets.push('salary_min = :salary_min');
@@ -1171,7 +1208,13 @@ app.patch('/api/jobs/:id', auth, async (req, res) => {
   }
 
   await pool.query(`UPDATE jobs SET ${sets.join(', ')} WHERE id = :id`, params);
-  const [next] = await pool.query('SELECT * FROM jobs WHERE id = :id', { id: job.id });
+  const [next] = await pool.query(
+    `SELECT j.*, COALESCE(c.name, j.sector) AS sector
+     FROM jobs j
+     LEFT JOIN job_categories c ON c.id = j.category_id
+     WHERE j.id = :id`,
+    { id: job.id },
+  );
   res.json(parseJob(next[0]));
 });
 
@@ -1364,9 +1407,11 @@ app.post('/api/applications', auth, async (req, res) => {
 
 app.get('/api/applications/mine', auth, async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT a.*, j.title AS job_title, j.slug AS job_slug, j.company_name, j.city, j.sector
+    `SELECT a.*, j.title AS job_title, j.slug AS job_slug, j.company_name, j.city,
+            COALESCE(c.name, j.sector) AS sector
      FROM applications a
      LEFT JOIN jobs j ON j.id = a.job_id
+     LEFT JOIN job_categories c ON c.id = j.category_id
      WHERE a.candidate_id = :id
      ORDER BY a.created_at DESC`,
     { id: req.user.id },
@@ -1437,9 +1482,11 @@ app.patch('/api/applications/:id', auth, async (req, res) => {
 // ---- Favorites ----
 app.get('/api/favorites', auth, async (req, res) => {
   const [rows] = await pool.query(
-    `SELECT f.id, f.job_id, f.created_at, j.title, j.slug, j.company_name, j.city, j.sector, j.job_type, j.salary_min, j.salary_max, j.status AS job_status
+    `SELECT f.id, f.job_id, f.created_at, j.title, j.slug, j.company_name, j.city,
+            COALESCE(c.name, j.sector) AS sector, j.job_type, j.salary_min, j.salary_max, j.status AS job_status
      FROM favorites f
      INNER JOIN jobs j ON j.id = f.job_id
+     LEFT JOIN job_categories c ON c.id = j.category_id
      WHERE f.user_id = :id
      ORDER BY f.created_at DESC`,
     { id: req.user.id },

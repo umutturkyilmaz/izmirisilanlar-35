@@ -255,23 +255,28 @@ export default function EditJobPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Kategori</label>
+                <label className="block text-sm font-medium mb-1.5">İş alanı / Kategori</label>
                 <select
                   className={inputCls}
                   value={form.category_id || ''}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      category_id: Number(e.target.value) || 0,
-                      sector: categories.find((c) => c.id === Number(e.target.value))?.name || form.sector,
-                    })
-                  }
+                  onChange={(e) => {
+                    const nextId = Number(e.target.value) || 0;
+                    const name = categories.find((c) => c.id === nextId)?.name || '';
+                    setForm((prev) => ({
+                      ...prev,
+                      category_id: nextId,
+                      sector: name || prev.sector,
+                    }));
+                  }}
                 >
                   <option value="">Seçin</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
+                <p className="text-xs text-foreground-500 mt-1">
+                  Listede görünen iş alanı bu seçimdir.
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -282,16 +287,6 @@ export default function EditJobPage() {
                     onChange={(e) => setForm({ ...form, city: e.target.value })}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1.5">Sektör</label>
-                  <input
-                    className={inputCls}
-                    value={form.sector}
-                    onChange={(e) => setForm({ ...form, sector: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Çalışma tipi</label>
                   <select
@@ -304,6 +299,8 @@ export default function EditJobPage() {
                     ))}
                   </select>
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Deneyim</label>
                   <select
