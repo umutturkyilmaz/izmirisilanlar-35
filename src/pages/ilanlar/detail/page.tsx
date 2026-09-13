@@ -9,6 +9,7 @@ import { ASSETS } from '@/lib/assets';
 import { EXPERIENCE_LABELS, EDUCATION_LABELS, formatSalary } from '@/lib/jobLabels';
 import { checkRateLimit } from '@/lib/rateLimit';
 import DocumentHead from '@/components/feature/DocumentHead';
+import AdSlot from '@/components/feature/AdSlot';
 import { jobPath } from '@/lib/jobPath';
 
 interface Job {
@@ -437,6 +438,8 @@ export default function JobDetailPage() {
                   </div>
                 </div>
               </div>
+
+              <AdSlot placement="job_detail" />
             </div>
           </div>
         </div>

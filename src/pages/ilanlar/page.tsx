@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import JobImage from '@/components/feature/JobImage';
 import { EXPERIENCE_LABELS, formatSalary } from '@/lib/jobLabels';
 import DocumentHead from '@/components/feature/DocumentHead';
+import AdSlot from '@/components/feature/AdSlot';
 import { jobPath } from '@/lib/jobPath';
 
 interface Job {
@@ -369,6 +370,10 @@ export default function JobListingsPage() {
               </div>
             )}
           </div>
+        </div>
+
+        <div className="px-4 md:px-6 lg:px-8 max-w-6xl mx-auto mb-4 md:mb-6">
+          <AdSlot placement="jobs_list" />
         </div>
 
         {/* Job List */}

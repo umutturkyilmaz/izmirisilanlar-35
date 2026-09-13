@@ -172,6 +172,21 @@ async function ensureSchema() {
       window_start DATETIME NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ads (
+      id CHAR(36) PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      image_url TEXT NOT NULL,
+      link_url TEXT NOT NULL,
+      placement VARCHAR(32) NOT NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      sort_order INT NOT NULL DEFAULT 0,
+      starts_at DATETIME NULL,
+      ends_at DATETIME NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_ads_placement_active (placement, is_active, sort_order)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
   // Mevcut ilanlara slug backfill
   try {
     const [needSlug] = await pool.query(`SELECT id, title FROM jobs WHERE slug IS NULL OR slug = '' LIMIT 500`);
@@ -1993,6 +2008,145 @@ app.patch('/api/admin/contact/:id/read', auth, async (req, res) => {
 app.delete('/api/admin/contact/:id', auth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
   await pool.query('DELETE FROM contact_messages WHERE id = ?', [req.params.id]);
+  res.json({ ok: true });
+});
+
+const AD_PLACEMENTS = new Set(['home', 'jobs_list', 'job_detail']);
+
+function normalizeAdLink(url) {
+  const s = String(url || '').trim();
+  if (!s) return null;
+  try {
+    const u = new URL(s);
+    if (!['http:', 'https:'].includes(u.protocol)) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+function mapAdRow(r) {
+  return {
+    ...r,
+    is_active: !!r.is_active,
+    sort_order: Number(r.sort_order) || 0,
+  };
+}
+
+app.get('/api/ads', async (req, res) => {
+  try {
+    const placement = String(req.query.placement || '').trim();
+    if (!AD_PLACEMENTS.has(placement)) {
+      return res.status(400).json({ error: 'Geçersiz placement' });
+    }
+    const [rows] = await pool.query(
+      `SELECT id, title, image_url, link_url, placement, sort_order
+       FROM ads
+       WHERE placement = :placement
+         AND is_active = 1
+         AND (starts_at IS NULL OR starts_at <= NOW())
+         AND (ends_at IS NULL OR ends_at >= NOW())
+       ORDER BY sort_order ASC, created_at DESC
+       LIMIT 20`,
+      { placement },
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: publicError(e, 'İşlem başarısız') });
+  }
+});
+
+app.get('/api/admin/ads', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const [rows] = await pool.query(
+    `SELECT id, title, image_url, link_url, placement, is_active, sort_order, starts_at, ends_at, created_at
+     FROM ads ORDER BY sort_order ASC, created_at DESC LIMIT 200`,
+  );
+  res.json(rows.map(mapAdRow));
+});
+
+app.post('/api/admin/ads', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const b = req.body || {};
+  const title = String(b.title || '').trim();
+  const image_url = String(b.image_url || '').trim();
+  const link_url = normalizeAdLink(b.link_url);
+  const placement = String(b.placement || '').trim();
+  if (!title) return res.status(400).json({ error: 'Başlık gerekli' });
+  if (!image_url) return res.status(400).json({ error: 'Görsel gerekli' });
+  if (!link_url) return res.status(400).json({ error: 'Geçerli http(s) link gerekli' });
+  if (!AD_PLACEMENTS.has(placement)) return res.status(400).json({ error: 'Geçersiz placement' });
+  const id = uid();
+  const sort_order = Math.floor(Number(b.sort_order)) || 0;
+  const is_active = b.is_active === false || b.is_active === 0 ? 0 : 1;
+  const starts_at = b.starts_at ? new Date(b.starts_at) : null;
+  const ends_at = b.ends_at ? new Date(b.ends_at) : null;
+  await pool.query(
+    `INSERT INTO ads
+     (id, title, image_url, link_url, placement, is_active, sort_order, starts_at, ends_at)
+     VALUES (:id, :title, :image_url, :link_url, :placement, :is_active, :sort_order, :starts_at, :ends_at)`,
+    { id, title, image_url, link_url, placement, is_active, sort_order, starts_at, ends_at },
+  );
+  const [rows] = await pool.query('SELECT * FROM ads WHERE id = ?', [id]);
+  res.status(201).json(mapAdRow(rows[0]));
+});
+
+app.patch('/api/admin/ads/:id', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const [existing] = await pool.query('SELECT * FROM ads WHERE id = ? LIMIT 1', [req.params.id]);
+  if (!existing[0]) return res.status(404).json({ error: 'Reklam yok' });
+  const b = req.body || {};
+  const sets = [];
+  const params = { id: req.params.id };
+  if (b.title !== undefined) {
+    const title = String(b.title || '').trim();
+    if (!title) return res.status(400).json({ error: 'Başlık gerekli' });
+    sets.push('title = :title');
+    params.title = title;
+  }
+  if (b.image_url !== undefined) {
+    const image_url = String(b.image_url || '').trim();
+    if (!image_url) return res.status(400).json({ error: 'Görsel gerekli' });
+    sets.push('image_url = :image_url');
+    params.image_url = image_url;
+  }
+  if (b.link_url !== undefined) {
+    const link_url = normalizeAdLink(b.link_url);
+    if (!link_url) return res.status(400).json({ error: 'Geçerli http(s) link gerekli' });
+    sets.push('link_url = :link_url');
+    params.link_url = link_url;
+  }
+  if (b.placement !== undefined) {
+    const placement = String(b.placement || '').trim();
+    if (!AD_PLACEMENTS.has(placement)) return res.status(400).json({ error: 'Geçersiz placement' });
+    sets.push('placement = :placement');
+    params.placement = placement;
+  }
+  if (b.is_active !== undefined) {
+    sets.push('is_active = :is_active');
+    params.is_active = b.is_active ? 1 : 0;
+  }
+  if (b.sort_order !== undefined) {
+    sets.push('sort_order = :sort_order');
+    params.sort_order = Math.floor(Number(b.sort_order)) || 0;
+  }
+  if (b.starts_at !== undefined) {
+    sets.push('starts_at = :starts_at');
+    params.starts_at = b.starts_at ? new Date(b.starts_at) : null;
+  }
+  if (b.ends_at !== undefined) {
+    sets.push('ends_at = :ends_at');
+    params.ends_at = b.ends_at ? new Date(b.ends_at) : null;
+  }
+  if (!sets.length) return res.status(400).json({ error: 'Boş güncelleme' });
+  await pool.query(`UPDATE ads SET ${sets.join(', ')} WHERE id = :id`, params);
+  const [rows] = await pool.query('SELECT * FROM ads WHERE id = ?', [req.params.id]);
+  res.json(mapAdRow(rows[0]));
+});
+
+app.delete('/api/admin/ads/:id', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  await pool.query('DELETE FROM ads WHERE id = ?', [req.params.id]);
   res.json({ ok: true });
 });
 

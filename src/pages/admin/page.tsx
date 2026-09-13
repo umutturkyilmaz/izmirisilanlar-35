@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { jobEditPath } from '@/lib/jobPath';
 import PaymentsSection from '@/pages/admin/components/PaymentsSection';
 import ContactMessagesSection from '@/pages/admin/components/ContactMessagesSection';
+import AdsSection from '@/pages/admin/components/AdsSection';
 
 const DashboardSection = lazy(() => import('@/pages/admin/components/DashboardSection'));
 
@@ -45,7 +46,7 @@ interface JobWithEmployer {
 
 type EmployerFilterTab = 'all' | 'pending' | 'verified' | 'rejected' | 'unverified';
 type JobFilterTab = 'all' | 'pending' | 'active' | 'rejected';
-type MainTab = 'employers' | 'jobs' | 'payments' | 'messages' | 'stats';
+type MainTab = 'employers' | 'jobs' | 'payments' | 'messages' | 'ads' | 'stats';
 
 export default function AdminPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -471,6 +472,17 @@ export default function AdminPage() {
               İletişim
             </button>
             <button
+              onClick={() => setMainTab('ads')}
+              className={`px-5 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
+                mainTab === 'ads'
+                  ? 'bg-white dark:bg-background-50 text-foreground-950 shadow-sm'
+                  : 'text-foreground-500 hover:text-foreground-700'
+              }`}
+            >
+              <i className="ri-megaphone-line mr-1.5" />
+              Reklamlar
+            </button>
+            <button
               onClick={() => setMainTab('stats')}
               className={`px-5 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
                 mainTab === 'stats'
@@ -813,6 +825,13 @@ export default function AdminPage() {
             <div>
               <h2 className="font-heading font-semibold text-lg mb-4">İletişim Mesajları</h2>
               <ContactMessagesSection />
+            </div>
+          )}
+
+          {mainTab === 'ads' && (
+            <div>
+              <h2 className="font-heading font-semibold text-lg mb-4">Reklamlar</h2>
+              <AdsSection />
             </div>
           )}
 
