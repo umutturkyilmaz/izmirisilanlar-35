@@ -9,6 +9,7 @@ import { addCreditsFromPackage } from '@/lib/credits';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { createNotification } from '@/lib/notifications';
 import { fetchIyzicoStatus } from '@/lib/iyzico';
+import PaymentLogos from '@/components/feature/PaymentLogos';
 
 export default function CheckoutPage() {
   const [searchParams] = useSearchParams();
@@ -238,6 +239,9 @@ export default function CheckoutPage() {
                     </p>
                   </div>
                 </div>
+                <div className="mt-3 flex justify-center">
+                  <PaymentLogos variant="band" />
+                </div>
 
                 <div className="mt-4 rounded-xl border border-background-200 bg-background-100/60 px-3 py-2.5 text-xs text-foreground-600 space-y-1">
                   <p className="font-medium text-foreground-800">Sipariş öncesi yasal belgeler</p>
@@ -288,6 +292,9 @@ export default function CheckoutPage() {
                       ? `${formatPrice(selected.price)} — Kart ile Satın Al`
                       : `${formatPrice(selected.price)} — Siparişi Tamamla`}
                 </button>
+                <div className="mt-3 flex justify-center">
+                  <PaymentLogos variant="pay" />
+                </div>
               </div>
             </form>
 

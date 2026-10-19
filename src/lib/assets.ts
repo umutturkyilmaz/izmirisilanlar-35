@@ -19,4 +19,8 @@ export const ASSETS = {
     '/assets/job-mock-7.jpg',
     '/assets/job-mock-8.jpg',
   ],
+  iyzicoBandColored: '/assets/iyzico/logo-band-colored.svg',
+  iyzicoBandWhite: '/assets/iyzico/logo-band-white.svg',
+  iyzicoPayColored: '/assets/iyzico/iyzico-ile-ode-colored.svg',
+  iyzicoPayWhite: '/assets/iyzico/iyzico-ile-ode-white.svg',
 } as const;

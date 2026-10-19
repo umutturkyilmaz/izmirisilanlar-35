@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ASSETS } from '@/lib/assets';
 import { SOCIAL_LINKS } from '@/lib/site';
+import PaymentLogos from '@/components/feature/PaymentLogos';
 
 export default function Footer() {
   const { t } = useTranslation('common');
@@ -156,8 +157,12 @@ export default function Footer() {
           </div>
         </div>
 
+        <div className="mt-10 flex justify-center">
+          <PaymentLogos variant="band" />
+        </div>
+
         {/* Bottom Bar */}
-        <div className="mt-10 pt-6 border-t border-background-200 dark:border-background-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="mt-6 pt-6 border-t border-background-200 dark:border-background-200 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-foreground-500 dark:text-foreground-500">
             &copy; {new Date().getFullYear()} {t('brand')}. {t('footer.rights')}
           </p>

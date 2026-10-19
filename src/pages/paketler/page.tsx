@@ -3,6 +3,7 @@ import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import DocumentHead from '@/components/feature/DocumentHead';
 import { JOB_PACKAGES, formatPrice } from '@/data/packages';
+import PaymentLogos from '@/components/feature/PaymentLogos';
 
 export default function PackagesPage() {
   return (
@@ -133,7 +134,11 @@ export default function PackagesPage() {
             ))}
           </div>
 
-          <p className="text-center text-sm text-foreground-500 mt-10">
+          <div className="mt-10 flex justify-center">
+            <PaymentLogos variant="band" />
+          </div>
+
+          <p className="text-center text-sm text-foreground-500 mt-6">
             Sipariş sonrası ilan yayınlama hakkınız işveren panelinde görünür.{' '}
             <Link to="/iletisim" className="text-primary-600 hover:underline">
               Destek / iletişim
