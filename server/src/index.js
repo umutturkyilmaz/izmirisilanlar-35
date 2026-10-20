@@ -1841,12 +1841,25 @@ app.post('/api/payments/iyzico/callback', express.urlencoded({ extended: true })
       );
     }
 
-    if (result.paymentStatus === 'SUCCESS' || result.status === 'success') {
+    if (payment.iyzico_token && payment.iyzico_token !== token) {
+      await conn.rollback();
+      logError('iyzico token mismatch', { paymentId });
+      return res.redirect(`${siteUrl}/odeme/iptal?reason=error`);
+    }
+
+    // status === 'success' yalnızca sorgunun başarılı olduğunu söyler; tahsilat paymentStatus ile kesinleşir
+    if (result.status === 'success' && result.paymentStatus === 'SUCCESS') {
       const catalog = getServerPackage(payment.package_id);
       const expected = Number(catalog?.price ?? payment.amount);
-      const paidRaw = result.paidPrice ?? result.price ?? expected;
-      const paid = Number(paidRaw);
-      if (!Number.isFinite(paid) || Math.abs(paid - expected) > 0.05) {
+      const basketPrice = Number(result.price);
+      const paid = Number(result.paidPrice);
+      // Taksit farkı alıcıya yansıtılırsa paidPrice sepet tutarından yüksek olabilir
+      if (
+        !Number.isFinite(basketPrice) ||
+        !Number.isFinite(paid) ||
+        Math.abs(basketPrice - expected) > 0.05 ||
+        paid < expected - 0.05
+      ) {
         await conn.query(`UPDATE job_payments SET status = 'amount_mismatch' WHERE id = :id`, {
           id: paymentId,
         });
