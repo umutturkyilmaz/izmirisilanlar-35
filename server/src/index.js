@@ -1692,7 +1692,9 @@ app.post('/api/payments/checkout', auth, async (req, res) => {
       'https://izmirisilanlari35.com'
     ).replace(/\/$/, '');
     const nameParts = String(b.buyer_name || 'Musteri').trim().split(/\s+/);
-    const init = await initializeCheckoutForm({
+    let init;
+    try {
+      init = await initializeCheckoutForm({
       conversationId: paymentId,
       basketId: paymentId,
       price: pkg.price,
@@ -1711,6 +1713,13 @@ app.post('/api/payments/checkout', auth, async (req, res) => {
         ip: req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip || '85.34.78.112',
       },
     });
+    } catch (e) {
+      await pool.query(`UPDATE job_payments SET status = 'failed' WHERE id = :id`, { id: paymentId });
+      logError('iyzico initialize', { error: e.message, paymentId });
+      return res.status(502).json({
+        error: `Ödeme başlatılamadı (iyzico: ${e.message || 'bilinmeyen hata'})`,
+      });
+    }
 
     await pool.query(`UPDATE job_payments SET iyzico_token = :token WHERE id = :id`, {
       token: init.token,
