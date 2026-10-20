@@ -89,7 +89,8 @@ export function initializeCheckoutForm(input) {
     client().checkoutFormInitialize.create(request, (err, result) => {
       if (err) return reject(err);
       if (result.status !== 'success') {
-        return reject(new Error(result.errorMessage || 'iyzico initialize başarısız'));
+        const code = result.errorCode ? ` [kod ${result.errorCode}]` : '';
+        return reject(new Error(`${result.errorMessage || 'iyzico initialize başarısız'}${code}`));
       }
       resolve({
         token: result.token,
