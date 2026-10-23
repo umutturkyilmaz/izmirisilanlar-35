@@ -24,6 +24,7 @@ const statusLabel: Record<string, string> = {
   admin_rejected: 'Reddedildi',
   failed: 'Başarısız',
   amount_mismatch: 'Tutar uyuşmazlığı',
+  refunded: 'İade edildi',
   test_paid: 'Eski test',
 };
 
@@ -72,6 +73,39 @@ export default function PaymentsSection() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Doğrulama başarısız');
+    }
+    setBusyId(null);
+  };
+
+  const refund = async (id: string) => {
+    if (
+      !window.confirm(
+        'Bu ödeme iyzico üzerinden iptal/iade edilecek. Kullanılmamış haklar silinir, bu paketle yayınlanan ilanlar kapatılır. Devam edilsin mi?',
+      )
+    ) {
+      return;
+    }
+    setBusyId(id);
+    const send = (body: Record<string, string>) =>
+      api<{ ok: boolean; message?: string }>(`/api/admin/payments/${id}/refund`, {
+        method: 'POST',
+        body,
+      });
+    try {
+      let r;
+      try {
+        r = await send({});
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '';
+        if (!msg.includes('Ödeme ID')) throw err;
+        const pid = window.prompt('iyzico panelindeki Ödeme ID (sayı):')?.trim();
+        if (!pid) throw err;
+        r = await send({ iyzico_payment_id: pid });
+      }
+      setError(r.message || null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'İade başarısız');
     }
     setBusyId(null);
   };
@@ -130,6 +164,7 @@ export default function PaymentsSection() {
               const canReview = r.status === 'pending_admin' || r.status === 'pending_iyzico';
               const canVerify =
                 Boolean(r.has_iyzico) && ['pending_iyzico', 'failed'].includes(r.status);
+              const canRefund = ['paid', 'amount_mismatch', 'failed', 'pending_iyzico'].includes(r.status);
               return (
                 <tr key={r.id} className="border-t border-background-200">
                   <td className="px-3 py-2 whitespace-nowrap">
@@ -163,6 +198,16 @@ export default function PaymentsSection() {
                         onClick={() => void verifyIyzico(r.id)}
                       >
                         iyzico’dan doğrula
+                      </button>
+                    )}
+                    {canRefund && (
+                      <button
+                        type="button"
+                        disabled={busyId === r.id}
+                        className="text-xs text-orange-700 font-semibold hover:underline mr-2 disabled:opacity-50"
+                        onClick={() => void refund(r.id)}
+                      >
+                        İade et
                       </button>
                     )}
                     {canReview && (

@@ -10,7 +10,13 @@ import path from 'path';
 import crypto from 'crypto';
 import mysql from 'mysql2/promise';
 import { fileURLToPath } from 'url';
-import { isIyzicoReady, initializeCheckoutForm, retrieveCheckoutForm } from './iyzico.js';
+import {
+  isIyzicoReady,
+  initializeCheckoutForm,
+  retrieveCheckoutForm,
+  cancelPayment,
+  refundPayment,
+} from './iyzico.js';
 import { getServerPackage, packageCreditsMeta } from './packages.js';
 import { assertUploadContent, publicError } from './security.js';
 import { isValidVkn, normalizeVkn } from './vkn.js';
@@ -1150,8 +1156,8 @@ app.post('/api/jobs', auth, async (req, res) => {
         requirements: b.requirements ? JSON.stringify(b.requirements) : null,
         benefits: b.benefits ? JSON.stringify(b.benefits) : null,
         image_url: b.image_url || null,
-        // Admin her zaman active; işveren her zaman pending (body ile bypass yok)
-        status: isAdmin ? 'active' : 'pending',
+        // Ödenmiş paket hakkı tüketildiği için işveren ilanı doğrudan yayına girer (body ile bypass yok)
+        status: 'active',
         featured: featured ? 1 : 0,
         expires_at: expiresAt,
         credit_id: usedCreditId,
@@ -1261,7 +1267,7 @@ app.patch('/api/jobs/:id', auth, async (req, res) => {
   res.json(parseJob(next[0]));
 });
 
-/** Paket hakkı ile ilan yenileme (atomik). İşveren → pending; Admin → doğrudan active. */
+/** Paket hakkı ile ilan yenileme (atomik) — doğrudan active. */
 app.post('/api/jobs/:id/renew', auth, async (req, res) => {
   if (!['employer', 'admin'].includes(req.user.role)) {
     return res.status(403).json({ error: 'Yetki yok' });
@@ -1315,7 +1321,7 @@ app.post('/api/jobs/:id/renew', auth, async (req, res) => {
     await conn.query(
       `UPDATE jobs SET status = :status, featured = :featured, expires_at = :exp, credit_id = :cid WHERE id = :id`,
       {
-        status: isAdmin ? 'active' : 'pending',
+        status: 'active',
         featured: featured ? 1 : 0,
         exp: expires,
         cid: usedCreditId,
@@ -2048,6 +2054,104 @@ app.post('/api/admin/payments/:id/verify-iyzico', auth, async (req, res) => {
     logError('admin verify iyzico', { error: e.message, id: p.id });
     res.status(502).json({ error: `iyzico sorgusu başarısız: ${e.message}` });
   }
+});
+
+/** Admin: iyzico tahsilatını iptal (aynı gün) veya iade et; kullanılmamış hakları geri al */
+app.post('/api/admin/payments/:id/refund', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  if (!isIyzicoReady()) return res.status(400).json({ error: 'iyzico kapalı' });
+  const [rows] = await pool.query(`SELECT * FROM job_payments WHERE id = :id LIMIT 1`, {
+    id: req.params.id,
+  });
+  const p = rows[0];
+  if (!p) return res.status(404).json({ error: 'Sipariş yok' });
+  if (p.status === 'refunded') return res.status(400).json({ error: 'Sipariş zaten iade edildi' });
+
+  const ip = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip || '85.34.78.112';
+  // Token süresi dolmuş olabilir; kayıtlı ödeme no veya admin'in iyzico panelinden girdiği no yedek
+  let iyzicoPaymentId = String(req.body?.iyzico_payment_id || '').trim() || null;
+  let paidPrice = Number(p.amount);
+  if (!iyzicoPaymentId && p.iyzico_token) {
+    try {
+      const result = await retrieveCheckoutForm(p.iyzico_token);
+      if (result.status === 'success' && result.paymentStatus === 'SUCCESS' && result.paymentId) {
+        iyzicoPaymentId = String(result.paymentId);
+        paidPrice = Number(result.paidPrice) || paidPrice;
+      }
+    } catch (e) {
+      logError('refund retrieve', { id: p.id, error: e.message });
+    }
+  }
+  if (!iyzicoPaymentId && /^\d+$/.test(String(p.iyzico_payment_id || ''))) {
+    iyzicoPaymentId = String(p.iyzico_payment_id);
+  }
+  if (!iyzicoPaymentId) {
+    return res.status(400).json({
+      error: 'iyzico ödeme numarası bulunamadı — iyzico panelindeki “Ödeme ID”yi girerek tekrar deneyin',
+      need_payment_id: true,
+    });
+  }
+  const result = { paymentId: iyzicoPaymentId, paidPrice };
+
+  let method;
+  try {
+    await cancelPayment(result.paymentId, ip);
+    method = 'cancel';
+  } catch (cancelErr) {
+    try {
+      await refundPayment(result.paymentId, result.paidPrice, ip);
+      method = 'refund';
+    } catch (refundErr) {
+      logError('iyzico refund', {
+        id: p.id,
+        cancel: cancelErr.message,
+        refund: refundErr.message,
+      });
+      return res.status(502).json({
+        error: `iyzico iptal/iade başarısız — iptal: ${cancelErr.message} · iade: ${refundErr.message}`,
+      });
+    }
+  }
+
+  const conn = await pool.getConnection();
+  let closedJobs = 0;
+  try {
+    await conn.beginTransaction();
+    await conn.query(
+      `UPDATE job_payments SET status = 'refunded', iyzico_payment_id = COALESCE(iyzico_payment_id, :pid) WHERE id = :id`,
+      { id: p.id, pid: String(result.paymentId) },
+    );
+    await conn.query(`UPDATE employer_credits SET remaining = 0 WHERE payment_id = :id`, { id: p.id });
+    const [upd] = await conn.query(
+      `UPDATE jobs SET status = 'closed'
+       WHERE status = 'active' AND credit_id IN (SELECT id FROM employer_credits WHERE payment_id = :id)`,
+      { id: p.id },
+    );
+    closedJobs = upd.affectedRows || 0;
+    await conn.commit();
+  } catch (e) {
+    await conn.rollback();
+    logError('refund db', { id: p.id, error: e.message });
+    return res.status(500).json({
+      error: `iyzico ${method === 'cancel' ? 'iptali' : 'iadesi'} yapıldı ama kayıt güncellenemedi: ${e.message}`,
+    });
+  } finally {
+    conn.release();
+  }
+
+  await notifyEmployerPackage(
+    p.employer_id,
+    'Ödemeniz iade edildi',
+    `${p.package_name} siparişiniz ${method === 'cancel' ? 'iptal' : 'iade'} edildi. Tutar kartınıza yansıyacaktır.`,
+    '/paketler',
+  ).catch(() => {});
+
+  res.json({
+    ok: true,
+    method,
+    closed_jobs: closedJobs,
+    message: `${method === 'cancel' ? 'İptal' : 'İade'} başarılı.${closedJobs ? ` ${closedJobs} ilan kapatıldı.` : ''}`,
+  });
 });
 
 app.get('/api/payments/:id', auth, async (req, res) => {

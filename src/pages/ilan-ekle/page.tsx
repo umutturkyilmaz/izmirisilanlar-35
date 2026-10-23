@@ -194,7 +194,6 @@ export default function PostJobPage() {
           requirements: filteredRequirements.length > 0 ? filteredRequirements : null,
           benefits: filteredBenefits.length > 0 ? filteredBenefits : null,
           image_url: imageUrl,
-          status: isAdmin ? 'active' : 'pending',
           featured: isAdmin ? adminFeatured : false,
           duration_days: isAdmin ? adminDurationDays : undefined,
         },
@@ -207,7 +206,7 @@ export default function PostJobPage() {
         type: 'success',
         message: isAdmin
           ? `İlan yayında. Süre: ${days} gün.`
-          : `İlan talebiniz alındı. Admin onayından sonra yayınlanır. (Hak süresi: ${days} gün)`,
+          : `İlanınız yayında. Süre: ${days} gün.`,
       });
       setTimeout(() => navigate(isAdmin ? '/admin' : '/profil/isveren'), 2000);
     } catch (err) {
@@ -294,12 +293,12 @@ export default function PostJobPage() {
         <div className="max-w-3xl mx-auto px-4 md:px-6">
           <div className="mb-8">
             <h1 className="font-heading font-bold text-2xl text-foreground-950">
-              {isAdmin ? 'Site İlanı Yayınla' : 'İlan Talebi Gönder'}
+              {isAdmin ? 'Site İlanı Yayınla' : 'Yeni İlan Yayınla'}
             </h1>
             <p className="text-sm text-foreground-600">
               {isAdmin
                 ? 'Yönetici ilanı — paket gerekmez, doğrudan yayına alınır.'
-                : `Doğrudan yayınlanmaz. Admin onayından sonra yayınlanır. Kalan hak: ${remaining}`}
+                : `Paket hakkınızla ilanınız hemen yayına alınır. Kalan hak: ${remaining}`}
             </p>
           </div>
 
@@ -509,9 +508,7 @@ export default function PostJobPage() {
               >
                 {submitting
                   ? 'Gönderiliyor...'
-                  : isAdmin
-                    ? 'İlanı Yayınla'
-                    : 'Admin Onayına Gönder'}
+                  : 'İlanı Yayınla'}
               </button>
               <Link to={isAdmin ? '/admin' : '/profil/isveren'} className="px-6 py-3 border border-background-300 font-semibold text-sm rounded-xl text-center text-foreground-950 dark:border-background-400">
                 {isAdmin ? 'Admin Paneline Dön' : 'Profile Dön'}

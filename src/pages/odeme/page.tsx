@@ -235,7 +235,7 @@ export default function CheckoutPage() {
                     <p className="text-xs text-foreground-600 mt-0.5">
                       {iyzicoOn
                         ? '3D Secure ile iyzico Checkout Form’a yönlendirileceksiniz.'
-                        : 'Kart altyapısı iyzico. Canlı tahsilat üye işyeri onayı sonrası açılır; şimdilik sipariş kaydı oluşur ve admin onayıyla hak tanımlanır (ücretsiz otomatik hak yok).'}
+                        : 'Kart ödemesi şu an kapalı; sipariş kaydı oluşur ve admin onayıyla hak tanımlanır.'}
                     </p>
                   </div>
                 </div>

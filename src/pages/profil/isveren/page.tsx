@@ -251,7 +251,7 @@ export default function EmployerProfilePage() {
         ),
       );
       setJobActionMsg(
-        isAdmin ? 'İlan yenilendi ve yayında.' : 'İlan paket hakkınızla yenilendi (admin onayı bekliyor).',
+        isAdmin ? 'İlan yenilendi ve yayında.' : 'İlan paket hakkınızla yenilendi ve yayında.',
       );
     } catch (err) {
       setJobActionMsg(err instanceof Error ? err.message : 'Yenileme başarısız');

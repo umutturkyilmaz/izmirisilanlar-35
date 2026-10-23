@@ -19,7 +19,7 @@ export const JOB_PACKAGES: JobPackage[] = [
     currency: 'TRY',
     durationDays: 7,
     features: [
-      '1 iş ilanı yayınlama hakkı (admin onaylı)',
+      '1 iş ilanı yayınlama hakkı (anında yayın)',
       '7 gün yayın süresi',
       'İzmir ve Türkiye görünürlüğü',
       'Başvuru paneli erişimi',
@@ -36,7 +36,7 @@ export const JOB_PACKAGES: JobPackage[] = [
     popular: true,
     badge: 'En Çok Tercih Edilen',
     features: [
-      '1 öne çıkan ilan hakkı (admin onaylı)',
+      '1 öne çıkan ilan hakkı (anında yayın)',
       '14 gün yayın süresi',
       'Ana sayfada vitrin alanı',
       'Liste üstü öncelikli sıralama',
@@ -53,7 +53,7 @@ export const JOB_PACKAGES: JobPackage[] = [
     durationDays: 30,
     badge: 'Kurumsal',
     features: [
-      '5 ilan yayınlama hakkı (admin onaylı)',
+      '5 ilan yayınlama hakkı (anında yayın)',
       '30 gün yayın süresi / ilan',
       '2 öne çıkan ilan hakkı',
       'Şirket profili vurgusu',

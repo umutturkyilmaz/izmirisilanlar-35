@@ -102,6 +102,39 @@ export function initializeCheckoutForm(input) {
   });
 }
 
+function callIyzico(resource, request) {
+  return new Promise((resolve, reject) => {
+    if (!isIyzicoReady()) {
+      reject(new Error('iyzico yapılandırılmamış'));
+      return;
+    }
+    client()[resource].create(request, (err, result) => {
+      if (err) return reject(err);
+      if (result.status !== 'success') {
+        const code = result.errorCode ? ` [kod ${result.errorCode}]` : '';
+        return reject(new Error(`${result.errorMessage || `iyzico ${resource} başarısız`}${code}`));
+      }
+      resolve(result);
+    });
+  });
+}
+
+/** Aynı gün (gün sonu öncesi) tam iptal */
+export function cancelPayment(paymentId, ip) {
+  return callIyzico('cancel', { locale: Iyzipay.LOCALE.TR, paymentId: String(paymentId), ip });
+}
+
+/** Gün sonu sonrası tam iade (v2: paymentId + tutar) */
+export function refundPayment(paymentId, price, ip) {
+  return callIyzico('refundV2', {
+    locale: Iyzipay.LOCALE.TR,
+    paymentId: String(paymentId),
+    price: money(price),
+    currency: Iyzipay.CURRENCY.TRY,
+    ip,
+  });
+}
+
 /** Checkout Form sonucu (callback token ile) */
 export function retrieveCheckoutForm(token, conversationId) {
   return new Promise((resolve, reject) => {
