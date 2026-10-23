@@ -35,6 +35,70 @@ const MIME = {
 const STATIC_EXT =
   /\.(js|mjs|css|map|png|jpe?g|webp|gif|svg|ico|woff2?|ttf|eot|json|txt|webmanifest)$/i;
 
+const SITE = 'https://izmirisilanlari35.com';
+const API_BASE = (
+  process.env.PUBLIC_API_URL ||
+  process.env.VITE_PUBLIC_API_URL ||
+  'https://izmirisilanlari35api-production.up.railway.app'
+).replace(/\/$/, '');
+const JOB_CACHE_MS = 10 * 60 * 1000;
+const jobCache = new Map();
+
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+const JOB_MISS_CACHE_MS = 30 * 1000;
+
+async function fetchJob(key) {
+  const hit = jobCache.get(key);
+  if (hit && Date.now() - hit.at < (hit.job ? JOB_CACHE_MS : JOB_MISS_CACHE_MS)) return hit.job;
+  let job = null;
+  try {
+    const r = await fetch(`${API_BASE}/api/jobs/${encodeURIComponent(key)}`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (r.ok) job = await r.json();
+  } catch {
+    /* API yavaş/erişilemez: genel meta ile devam */
+  }
+  jobCache.set(key, { job, at: Date.now() });
+  if (jobCache.size > 500) jobCache.delete(jobCache.keys().next().value);
+  return job;
+}
+
+/** Paylaşım botları (WhatsApp, Facebook, X, Google) JS çalıştırmadan ilan başlığını görsün */
+function injectJobMeta(html, job, pathname) {
+  const plain = String(job.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const where = [job.company_name, job.city].filter(Boolean).join(' · ');
+  const title = `${job.title}${where ? ` — ${where}` : ''} | İzmir İş İlanları 35`;
+  const desc = (plain || `${job.title} iş ilanı. Hemen başvurun.`).slice(0, 180);
+  const url = `${SITE}${pathname}`;
+  const image = /^https?:\/\//.test(job.image_url || '') ? job.image_url : `${SITE}/assets/og-image.jpg`;
+  const set = (pattern, replacement) => {
+    html = pattern.test(html) ? html.replace(pattern, replacement) : html;
+  };
+  set(/<title>[^<]*<\/title>/, `<title>${escapeHtml(title)}</title>`);
+  set(/<meta name="description" content="[^"]*"\s*\/?>/, `<meta name="description" content="${escapeHtml(desc)}" />`);
+  set(/<link rel="canonical" href="[^"]*"\s*\/?>/, `<link rel="canonical" href="${escapeHtml(url)}" />`);
+  set(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${escapeHtml(title)}" />`);
+  set(/<meta property="og:description" content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${escapeHtml(desc)}" />`);
+  set(/<meta property="og:url" content="[^"]*"\s*\/?>/, `<meta property="og:url" content="${escapeHtml(url)}" />`);
+  set(/<meta property="og:type" content="[^"]*"\s*\/?>/, '<meta property="og:type" content="article" />');
+  set(/<meta property="og:image" content="[^"]*"\s*\/?>/, `<meta property="og:image" content="${escapeHtml(image)}" />`);
+  set(/<meta name="twitter:title" content="[^"]*"\s*\/?>/, `<meta name="twitter:title" content="${escapeHtml(title)}" />`);
+  set(/<meta name="twitter:description" content="[^"]*"\s*\/?>/, `<meta name="twitter:description" content="${escapeHtml(desc)}" />`);
+  set(/<meta name="twitter:image" content="[^"]*"\s*\/?>/, `<meta name="twitter:image" content="${escapeHtml(image)}" />`);
+  if (image !== `${SITE}/assets/og-image.jpg`) {
+    html = html.replace(/\s*<meta property="og:image:(width|height)" content="[^"]*"\s*\/?>/g, '');
+  }
+  return html;
+}
+
 function send(res, status, body, headers = {}) {
   res.writeHead(status, headers);
   res.end(body);
@@ -96,7 +160,20 @@ const server = http.createServer((req, res) => {
   const isHtml = ext === '.html';
   const hashed = pathname.includes('/assets/');
 
-  fs.readFile(resolved, (err, data) => {
+  fs.readFile(resolved, async (err, data) => {
+    if (!err && isHtml) {
+      const m = pathname.match(/^\/ilan\/([^/]+)\/?$/);
+      let key = null;
+      try {
+        key = m ? decodeURIComponent(m[1]) : null;
+      } catch {
+        key = null;
+      }
+      if (key) {
+        const job = await fetchJob(key);
+        if (job?.title) data = Buffer.from(injectJobMeta(data.toString('utf8'), job, pathname), 'utf8');
+      }
+    }
     if (err) {
       if (isAssetPath) {
         return send(res, 404, 'Not Found', {

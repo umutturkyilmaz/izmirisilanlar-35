@@ -19,6 +19,18 @@ export const CONTACT = {
   whatsapp: '905308561103',
 } as const;
 
+/** Satıcı / veri sorumlusu kimliği — mesafeli satış ve KVKK metinlerinde zorunlu */
+export const SELLER = {
+  name: 'Umut Türkyılmaz',
+  brand: 'İzmir İş İlanları 35',
+  address: 'Muratbey Mah. 3576 Sk. No: 1 İç Kapı No: 9, Torbalı / İzmir',
+  taxOffice: 'Torbalı Vergi Dairesi',
+  taxNumber: '8810437006',
+  phone: CONTACT.phone,
+  email: CONTACT.email,
+  web: 'https://izmirisilanlari35.com',
+} as const;
+
 /** Hata bildirimi / site görüşleri WhatsApp */
 export const FEEDBACK_WHATSAPP = {
   phone: '+90 555 267 77 39',

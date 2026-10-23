@@ -3,6 +3,33 @@ import type { ReactNode } from 'react';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import DocumentHead from '@/components/feature/DocumentHead';
+import { SELLER } from '@/lib/site';
+
+function SellerInfo({ title }: { title: string }) {
+  return (
+    <div className="rounded-xl border border-background-200 bg-background-50 dark:bg-background-100 p-4">
+      <p className="font-semibold text-foreground-950 mb-2">{title}</p>
+      <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1">
+        <dt className="text-foreground-500">Ad Soyad / Unvan</dt>
+        <dd>
+          {SELLER.name} ({SELLER.brand})
+        </dd>
+        <dt className="text-foreground-500">Adres</dt>
+        <dd>{SELLER.address}</dd>
+        <dt className="text-foreground-500">Vergi Dairesi / No</dt>
+        <dd>
+          {SELLER.taxOffice} — {SELLER.taxNumber}
+        </dd>
+        <dt className="text-foreground-500">Telefon</dt>
+        <dd>{SELLER.phone}</dd>
+        <dt className="text-foreground-500">E-posta</dt>
+        <dd>{SELLER.email}</dd>
+        <dt className="text-foreground-500">Web</dt>
+        <dd>{SELLER.web.replace('https://', '')}</dd>
+      </dl>
+    </div>
+  );
+}
 
 type LegalProps = {
   title: string;
@@ -43,6 +70,7 @@ export function KvkkPage() {
         İzmir İş İlanları 35 (“Platform”) olarak 6698 sayılı Kişisel Verilerin Korunması Kanunu
         kapsamında veri sorumlusu sıfatıyla kişisel verilerinizi aşağıda açıklanan amaçlarla işleriz.
       </p>
+      <SellerInfo title="Veri sorumlusu" />
       <h2 className="font-heading font-semibold text-foreground-950 text-base">İşlenen veriler</h2>
       <ul className="list-disc pl-5 space-y-1">
         <li>Kimlik ve iletişim: ad soyad, e-posta, telefon, şehir</li>
@@ -93,8 +121,9 @@ export function DistanceSalesPage() {
     <LegalLayout title="Mesafeli Satış Sözleşmesi" path="/mesafeli-satis">
       <p>
         Bu sözleşme, Platform üzerinden satılan dijital hizmet (iş ilanı yayınlama paketleri)
-        için geçerlidir. Satıcı: İzmir İş İlanları 35 işletmesi. Alıcı: paket satın alan işveren.
+        için geçerlidir. Alıcı: paket satın alan ve sipariş sırasında bilgilerini beyan eden işveren.
       </p>
+      <SellerInfo title="Satıcı" />
       <h2 className="font-heading font-semibold text-foreground-950 text-base">Satılan ürün / hizmetler</h2>
       <ul className="list-disc pl-5 space-y-1">
         <li>Standart İlan (ürün kodu: standart) — 7 gün yayın — {formatPriceInline(499)}</li>
@@ -220,8 +249,10 @@ export function RefundPage() {
         <Link to="/iletisim" className="text-primary-600 hover:underline">
           iletişim
         </Link>{' '}
-        formunu kullanın; sipariş / ödeme numaranızı yazın. Yanıt süresi hedefi: 1–3 iş günü.
+        formunu kullanın veya {SELLER.email} adresine yazın; sipariş / ödeme numaranızı belirtin.
+        Yanıt süresi hedefi: 1–3 iş günü.
       </p>
+      <SellerInfo title="Satıcı" />
     </LegalLayout>
   );
 }
