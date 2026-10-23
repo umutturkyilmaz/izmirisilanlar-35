@@ -7,6 +7,7 @@ const REASONS: Record<string, string> = {
   payment_not_found: 'Sipariş kaydı bulunamadı.',
   failed: 'Kart ödemesi başarısız veya iptal edildi.',
   error: 'Ödeme doğrulanırken bir hata oluştu.',
+  amount_mismatch: 'Ödenen tutar paket fiyatıyla eşleşmedi. Lütfen destek ile iletişime geçin.',
 };
 
 export default function PaymentCancelPage() {
