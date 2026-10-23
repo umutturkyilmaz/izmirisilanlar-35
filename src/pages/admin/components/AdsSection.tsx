@@ -321,9 +321,27 @@ export default function AdsSection() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-foreground-950 truncate">{ad.title}</p>
                 <p className="text-xs text-foreground-500 mt-0.5">
-                  {PLACEMENT_LABELS[ad.placement] || ad.placement} · sıra {ad.sort_order} ·{' '}
-                  {ad.is_active ? 'aktif' : 'pasif'}
+                  {PLACEMENT_LABELS[ad.placement] || ad.placement} · sıra {ad.sort_order}
+                  {ad.starts_at ? ` · başlangıç ${new Date(ad.starts_at).toLocaleString('tr-TR')}` : ''}
+                  {ad.ends_at ? ` · bitiş ${new Date(ad.ends_at).toLocaleString('tr-TR')}` : ''}
                 </p>
+                {(() => {
+                  const now = Date.now();
+                  const notStarted = ad.starts_at && new Date(ad.starts_at).getTime() > now;
+                  const expired = ad.ends_at && new Date(ad.ends_at).getTime() < now;
+                  const [label, cls] = !ad.is_active
+                    ? ['Pasif — sitede görünmüyor', 'bg-background-200 text-foreground-700']
+                    : expired
+                      ? ['Süresi doldu — sitede görünmüyor', 'bg-red-100 text-red-800']
+                      : notStarted
+                        ? ['Henüz başlamadı — sitede görünmüyor', 'bg-amber-100 text-amber-800']
+                        : ['Yayında', 'bg-green-100 text-green-800'];
+                  return (
+                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${cls}`}>
+                      {label}
+                    </span>
+                  );
+                })()}
                 <a
                   href={ad.link_url}
                   target="_blank"
