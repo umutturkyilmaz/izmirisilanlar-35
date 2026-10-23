@@ -135,6 +135,27 @@ export function refundPayment(paymentId, price, ip) {
   });
 }
 
+/** Raporlama: sipariş (conversationId) bazında ödeme detayları — panelden yapılan iade/iptal dahil */
+export function retrievePaymentDetails(paymentConversationId) {
+  return new Promise((resolve, reject) => {
+    if (!isIyzicoReady()) {
+      reject(new Error('iyzico yapılandırılmamış'));
+      return;
+    }
+    client().reportingTransactionDetails.retrieve(
+      { locale: Iyzipay.LOCALE.TR, paymentConversationId: String(paymentConversationId) },
+      (err, result) => {
+        if (err) return reject(err);
+        if (result.status !== 'success') {
+          const code = result.errorCode ? ` [kod ${result.errorCode}]` : '';
+          return reject(new Error(`${result.errorMessage || 'iyzico rapor sorgusu başarısız'}${code}`));
+        }
+        resolve(result);
+      },
+    );
+  });
+}
+
 /** Checkout Form sonucu (callback token ile) */
 export function retrieveCheckoutForm(token, conversationId) {
   return new Promise((resolve, reject) => {

@@ -16,6 +16,7 @@ import {
   retrieveCheckoutForm,
   cancelPayment,
   refundPayment,
+  retrievePaymentDetails,
 } from './iyzico.js';
 import { getServerPackage, packageCreditsMeta } from './packages.js';
 import { assertUploadContent, publicError } from './security.js';
@@ -2070,6 +2071,142 @@ app.post('/api/admin/payments/:id/verify-iyzico', auth, async (req, res) => {
   }
 });
 
+/**
+ * iyzico raporundan siparişin tamamen iade/iptal edilip edilmediğini çıkarır.
+ * Alan adları iyzico raporlama API'sine göre; bilinmeyen biçimlerde güvenli tarafta (iade yok) kalır.
+ */
+async function checkIyzicoRefund(paymentId) {
+  const details = await retrievePaymentDetails(paymentId);
+  const list = Array.isArray(details.payments) ? details.payments : [];
+  const successful = list.filter((x) => String(x.paymentStatus) === '1' || x.paymentStatus === 'SUCCESS');
+  if (!successful.length) return { refunded: false, found: list.length > 0, details };
+  const refunded = successful.every((x) => {
+    const refundStatus = String(x.paymentRefundStatus || '').toUpperCase();
+    const cancelled = Array.isArray(x.cancels) && x.cancels.length > 0;
+    const refundedTotal = (Array.isArray(x.refunds) ? x.refunds : []).reduce(
+      (s, r) => s + (Number(r.refundPrice ?? r.price) || 0),
+      0,
+    );
+    const paid = Number(x.paidPrice ?? x.price) || 0;
+    return (
+      cancelled ||
+      refundStatus.includes('TOTAL') ||
+      refundStatus === 'FULLY_REFUNDED' ||
+      (paid > 0 && refundedTotal >= paid - 0.05)
+    );
+  });
+  return { refunded, found: true, details };
+}
+
+/** İade edilen siparişin haklarını sıfırla, ilanlarını kapat, işvereni bilgilendir. Kapatılan ilan sayısını döner. */
+async function revokeRefundedPayment(payment, iyzicoPaymentId = null) {
+  const conn = await pool.getConnection();
+  let closedJobs = 0;
+  try {
+    await conn.beginTransaction();
+    const [upd] = await conn.query(
+      `UPDATE job_payments SET status = 'refunded', iyzico_payment_id = COALESCE(iyzico_payment_id, :pid)
+       WHERE id = :id AND status <> 'refunded'`,
+      { id: payment.id, pid: iyzicoPaymentId ? String(iyzicoPaymentId) : null },
+    );
+    await conn.query(`UPDATE employer_credits SET remaining = 0 WHERE payment_id = :id`, { id: payment.id });
+    const [jobs] = await conn.query(
+      `UPDATE jobs SET status = 'closed'
+       WHERE status IN ('active','pending')
+         AND credit_id IN (SELECT id FROM employer_credits WHERE payment_id = :id)`,
+      { id: payment.id },
+    );
+    closedJobs = jobs.affectedRows || 0;
+    await conn.commit();
+    if (upd.affectedRows) {
+      await notifyEmployerPackage(
+        payment.employer_id,
+        'Ödemeniz iade edildi',
+        `${payment.package_name} siparişiniz iade edildi; bu paketle yayınlanan ilanlar kapatıldı. Tutar kartınıza yansıyacaktır.`,
+        '/paketler',
+      ).catch(() => {});
+    }
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    conn.release();
+  }
+  return closedJobs;
+}
+
+/** Ödenmiş iyzico siparişlerini rapordan kontrol et; panelden iade edilenleri kapat */
+async function syncIyzicoRefunds() {
+  const [rows] = await pool.query(
+    `SELECT * FROM job_payments
+     WHERE status IN ('paid','amount_mismatch') AND iyzico_token IS NOT NULL
+       AND created_at > NOW() - INTERVAL 120 DAY
+     ORDER BY created_at DESC LIMIT 200`,
+  );
+  const results = [];
+  for (const p of rows) {
+    try {
+      const check = await checkIyzicoRefund(p.id);
+      if (check.refunded) {
+        const closedJobs = await revokeRefundedPayment(p);
+        results.push({ id: p.id, refunded: true, closed_jobs: closedJobs });
+      } else {
+        results.push({ id: p.id, refunded: false });
+      }
+    } catch (e) {
+      results.push({ id: p.id, error: e.message });
+    }
+  }
+  const refundedCount = results.filter((r) => r.refunded).length;
+  if (refundedCount) logInfo('iyzico refund sync', { refunded: refundedCount });
+  return results;
+}
+
+app.post('/api/admin/payments/sync-refunds', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  if (!isIyzicoReady()) return res.status(400).json({ error: 'iyzico kapalı' });
+  try {
+    const results = await syncIyzicoRefunds();
+    const refunded = results.filter((r) => r.refunded);
+    const errors = results.filter((r) => r.error);
+    const closed = refunded.reduce((s, r) => s + (r.closed_jobs || 0), 0);
+    res.json({
+      ok: true,
+      checked: results.length,
+      refunded: refunded.length,
+      errors: errors.length,
+      message: `${results.length} ödeme kontrol edildi · ${refunded.length} iade bulundu · ${closed} ilan kapatıldı${
+        errors.length ? ` · ${errors.length} sorgu hatası (${errors[0].error})` : ''
+      }`,
+    });
+  } catch (e) {
+    logError('sync refunds', { error: e.message });
+    res.status(500).json({ error: `Eşitleme başarısız: ${e.message}` });
+  }
+});
+
+/** Admin: iyzico panelinden iade edilmiş siparişi kayıtta iade olarak işaretle (iyzico'ya istek atmaz) */
+app.post('/api/admin/payments/:id/mark-refunded', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const [rows] = await pool.query(`SELECT * FROM job_payments WHERE id = :id LIMIT 1`, {
+    id: req.params.id,
+  });
+  const p = rows[0];
+  if (!p) return res.status(404).json({ error: 'Sipariş yok' });
+  if (p.status === 'refunded') return res.status(400).json({ error: 'Sipariş zaten iade edildi' });
+  try {
+    const closedJobs = await revokeRefundedPayment(p);
+    res.json({
+      ok: true,
+      closed_jobs: closedJobs,
+      message: `Sipariş iade edildi olarak işaretlendi.${closedJobs ? ` ${closedJobs} ilan kapatıldı.` : ''}`,
+    });
+  } catch (e) {
+    logError('mark refunded', { id: p.id, error: e.message });
+    res.status(500).json({ error: `İşaretleme başarısız: ${e.message}` });
+  }
+});
+
 /** Admin: iyzico tahsilatını iptal (aynı gün) veya iade et; kullanılmamış hakları geri al */
 app.post('/api/admin/payments/:id/refund', auth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
@@ -2116,49 +2253,32 @@ app.post('/api/admin/payments/:id/refund', auth, async (req, res) => {
       await refundPayment(result.paymentId, result.paidPrice, ip);
       method = 'refund';
     } catch (refundErr) {
-      logError('iyzico refund', {
-        id: p.id,
-        cancel: cancelErr.message,
-        refund: refundErr.message,
-      });
-      return res.status(502).json({
-        error: `iyzico iptal/iade başarısız — iptal: ${cancelErr.message} · iade: ${refundErr.message}`,
-      });
+      // Panelden önceden iade edilmişse iyzico iki işlemi de reddeder — rapordan doğrula
+      const check = await checkIyzicoRefund(p.id).catch(() => null);
+      if (check?.refunded) {
+        method = 'external';
+      } else {
+        logError('iyzico refund', {
+          id: p.id,
+          cancel: cancelErr.message,
+          refund: refundErr.message,
+        });
+        return res.status(502).json({
+          error: `iyzico iptal/iade başarısız — iptal: ${cancelErr.message} · iade: ${refundErr.message}`,
+        });
+      }
     }
   }
 
-  const conn = await pool.getConnection();
   let closedJobs = 0;
   try {
-    await conn.beginTransaction();
-    await conn.query(
-      `UPDATE job_payments SET status = 'refunded', iyzico_payment_id = COALESCE(iyzico_payment_id, :pid) WHERE id = :id`,
-      { id: p.id, pid: String(result.paymentId) },
-    );
-    await conn.query(`UPDATE employer_credits SET remaining = 0 WHERE payment_id = :id`, { id: p.id });
-    const [upd] = await conn.query(
-      `UPDATE jobs SET status = 'closed'
-       WHERE status = 'active' AND credit_id IN (SELECT id FROM employer_credits WHERE payment_id = :id)`,
-      { id: p.id },
-    );
-    closedJobs = upd.affectedRows || 0;
-    await conn.commit();
+    closedJobs = await revokeRefundedPayment(p, result.paymentId);
   } catch (e) {
-    await conn.rollback();
     logError('refund db', { id: p.id, error: e.message });
     return res.status(500).json({
-      error: `iyzico ${method === 'cancel' ? 'iptali' : 'iadesi'} yapıldı ama kayıt güncellenemedi: ${e.message}`,
+      error: `iyzico tarafı tamam ama kayıt güncellenemedi: ${e.message}`,
     });
-  } finally {
-    conn.release();
   }
-
-  await notifyEmployerPackage(
-    p.employer_id,
-    'Ödemeniz iade edildi',
-    `${p.package_name} siparişiniz ${method === 'cancel' ? 'iptal' : 'iade'} edildi. Tutar kartınıza yansıyacaktır.`,
-    '/paketler',
-  ).catch(() => {});
 
   res.json({
     ok: true,
@@ -2600,6 +2720,18 @@ function startExpireScheduler() {
   };
   void tick();
   setInterval(tick, HOUR_MS);
+
+  // iyzico panelinden yapılan iadeler webhook ile gelmez; periyodik eşitleme
+  const refundTick = async () => {
+    if (!isIyzicoReady()) return;
+    try {
+      await syncIyzicoRefunds();
+    } catch (e) {
+      logError('refund sync scheduler', { error: e.message });
+    }
+  };
+  setTimeout(refundTick, 60 * 1000);
+  setInterval(refundTick, 30 * 60 * 1000);
 }
 
 app.use((err, req, res, _next) => {

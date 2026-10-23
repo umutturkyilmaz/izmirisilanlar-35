@@ -77,6 +77,22 @@ export default function PaymentsSection() {
     setBusyId(null);
   };
 
+  const [syncing, setSyncing] = useState(false);
+  const syncRefunds = async () => {
+    setSyncing(true);
+    try {
+      const r = await api<{ message?: string }>('/api/admin/payments/sync-refunds', {
+        method: 'POST',
+        body: {},
+      });
+      setError(r.message || null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Eşitleme başarısız');
+    }
+    setSyncing(false);
+  };
+
   const refund = async (id: string) => {
     if (
       !window.confirm(
@@ -105,7 +121,26 @@ export default function PaymentsSection() {
       setError(r.message || null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'İade başarısız');
+      const msg = err instanceof Error ? err.message : 'İade başarısız';
+      if (
+        msg.includes('iptal/iade başarısız') &&
+        window.confirm(
+          `${msg}\n\nBu ödeme iyzico panelinden zaten iade edildiyse, kayıtta "İade edildi" olarak işaretleyip ilanları kapatayım mı?`,
+        )
+      ) {
+        try {
+          const r = await api<{ message?: string }>(`/api/admin/payments/${id}/mark-refunded`, {
+            method: 'POST',
+            body: {},
+          });
+          setError(r.message || null);
+          await load();
+        } catch (e2) {
+          setError(e2 instanceof Error ? e2.message : 'İşaretleme başarısız');
+        }
+      } else {
+        setError(msg);
+      }
     }
     setBusyId(null);
   };
@@ -144,6 +179,17 @@ export default function PaymentsSection() {
 
   return (
     <div className="space-y-3">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          disabled={syncing}
+          onClick={() => void syncRefunds()}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-background-300 hover:bg-background-100 disabled:opacity-50"
+          title="iyzico panelinden yapılan iadeleri bul; haklarını sil, ilanlarını kapat"
+        >
+          {syncing ? 'Eşitleniyor…' : 'iyzico iadelerini eşitle'}
+        </button>
+      </div>
       {error && (
         <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-800">{error}</div>
       )}
