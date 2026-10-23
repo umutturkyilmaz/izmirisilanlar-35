@@ -1832,16 +1832,32 @@ app.post('/api/payments/iyzico/callback', express.urlencoded({ extended: true })
       return res.redirect(`${siteUrl}/odeme/iptal?reason=no_token`);
     }
     const result = await retrieveCheckoutForm(token);
-    const paymentId = result.conversationId;
     await conn.beginTransaction();
-    const [rows] = await conn.query(`SELECT * FROM job_payments WHERE id = :id LIMIT 1 FOR UPDATE`, {
-      id: paymentId,
-    });
+    // retrieve yanıtındaki conversationId, istekte gönderilmezse boş döner; token ve basketId güvenilir
+    const [rows] = await conn.query(
+      `SELECT * FROM job_payments
+       WHERE iyzico_token = :token OR id = :basketId OR id = :conversationId
+       ORDER BY (iyzico_token = :token) DESC
+       LIMIT 1 FOR UPDATE`,
+      {
+        token,
+        basketId: result.basketId || '',
+        conversationId: result.conversationId || '',
+      },
+    );
     const payment = rows[0];
     if (!payment) {
       await conn.rollback();
+      logError('iyzico callback payment not found', {
+        basketId: result.basketId,
+        conversationId: result.conversationId,
+        status: result.status,
+        paymentStatus: result.paymentStatus,
+        errorMessage: result.errorMessage,
+      });
       return res.redirect(`${siteUrl}/odeme/iptal?reason=payment_not_found`);
     }
+    const paymentId = payment.id;
 
     if (['paid', 'admin_approved'].includes(payment.status)) {
       await conn.commit();

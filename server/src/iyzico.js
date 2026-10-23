@@ -103,13 +103,15 @@ export function initializeCheckoutForm(input) {
 }
 
 /** Checkout Form sonucu (callback token ile) */
-export function retrieveCheckoutForm(token) {
+export function retrieveCheckoutForm(token, conversationId) {
   return new Promise((resolve, reject) => {
     if (!isIyzicoReady()) {
       reject(new Error('iyzico yapılandırılmamış'));
       return;
     }
-    client().checkoutForm.retrieve({ locale: Iyzipay.LOCALE.TR, token }, (err, result) => {
+    const request = { locale: Iyzipay.LOCALE.TR, token };
+    if (conversationId) request.conversationId = conversationId;
+    client().checkoutForm.retrieve(request, (err, result) => {
       if (err) return reject(err);
       resolve(result);
     });
