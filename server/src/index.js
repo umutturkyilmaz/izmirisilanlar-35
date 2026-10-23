@@ -195,6 +195,20 @@ async function ensureSchema() {
       INDEX idx_ads_placement_active (placement, is_active, sort_order)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  // Ödenmiş paket hakkıyla eklenip eski kuralla onaya düşmüş ilanları yayına al
+  try {
+    const [pub] = await pool.query(
+      `UPDATE jobs j
+       JOIN employer_credits c ON c.id = j.credit_id
+       JOIN job_payments p ON p.id = c.payment_id
+       SET j.status = 'active'
+       WHERE j.status = 'pending' AND p.status IN ('paid','admin_approved')
+         AND (j.expires_at IS NULL OR j.expires_at > NOW())`,
+    );
+    if (pub.affectedRows) console.log('paid pending jobs activated', pub.affectedRows);
+  } catch (e) {
+    console.warn('pending job activation', e.message);
+  }
   // Mevcut ilanlara slug backfill
   try {
     const [needSlug] = await pool.query(`SELECT id, title FROM jobs WHERE slug IS NULL OR slug = '' LIMIT 500`);
