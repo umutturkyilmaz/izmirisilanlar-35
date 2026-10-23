@@ -48,6 +48,7 @@ type Props = {
   image?: string | null;
   jsonLd?: object | null;
   jsonLdId?: string;
+  noindex?: boolean;
 };
 
 /** Sayfa bazlı title / meta / canonical (SPA) */
@@ -58,6 +59,7 @@ export default function DocumentHead({
   image,
   jsonLd,
   jsonLdId = 'page',
+  noindex = false,
 }: Props) {
   useEffect(() => {
     const fullTitle = title ? `${title} | İzmir İş İlanları 35` : DEFAULT_TITLE;
@@ -76,11 +78,13 @@ export default function DocumentHead({
       setMeta('name', 'twitter:image', image);
     }
     setJsonLd(jsonLdId, jsonLd || null);
+    setMeta('name', 'robots', noindex ? 'noindex, follow' : 'index, follow');
     return () => {
       document.title = DEFAULT_TITLE;
       setJsonLd(jsonLdId, null);
+      setMeta('name', 'robots', 'index, follow');
     };
-  }, [title, description, path, image, jsonLd, jsonLdId]);
+  }, [title, description, path, image, jsonLd, jsonLdId, noindex]);
 
   return null;
 }

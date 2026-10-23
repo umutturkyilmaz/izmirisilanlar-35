@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /odeme/basarili
+Disallow: /odeme/iptal
 
 Sitemap: https://izmirisilanlari35.com/sitemap.xml
+Sitemap: https://izmirisilanlari35api-production.up.railway.app/sitemap-jobs.xml

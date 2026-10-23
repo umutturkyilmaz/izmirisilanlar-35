@@ -39,7 +39,6 @@ export default function LoginPage() {
       if (result.success) afterLogin(result.profile?.role);
       else setError(result.error || 'Google girişi başarısız');
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [navigate, signInWithGoogle, location.state],
   );
 

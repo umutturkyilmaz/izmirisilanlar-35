@@ -1,8 +1,11 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import DocumentHead from '@/components/feature/DocumentHead';
 
 export default function NotFound() {
+  const { pathname } = useLocation();
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-background-50 dark:bg-background-50">
+      <DocumentHead title="Sayfa Bulunamadı" path={pathname} noindex />
       <div className="text-center max-w-md">
         <div className="w-20 h-20 mx-auto rounded-2xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mb-6">
           <i className="ri-error-warning-line text-3xl text-primary-600 dark:text-primary-400" />

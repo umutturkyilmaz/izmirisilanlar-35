@@ -36,6 +36,9 @@ const DistanceSalesPage = lazyRetry(() =>
 const RefundPage = lazyRetry(() =>
   import("../pages/yasal/pages").then((m) => ({ default: m.RefundPage })),
 );
+const TermsPage = lazyRetry(() =>
+  import("../pages/yasal/pages").then((m) => ({ default: m.TermsPage })),
+);
 
 const routes: RouteObject[] = [
   { path: "/", element: <Home /> },
@@ -72,6 +75,7 @@ const routes: RouteObject[] = [
   { path: "/gizlilik", element: <PrivacyPage /> },
   { path: "/mesafeli-satis", element: <DistanceSalesPage /> },
   { path: "/iade-iptal", element: <RefundPage /> },
+  { path: "/kullanim-kosullari", element: <TermsPage /> },
   { path: "/profil", element: <ProfileRedirect /> },
   {
     path: "/profil/aday",

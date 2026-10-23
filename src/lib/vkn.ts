@@ -4,7 +4,7 @@
  */
 
 export function normalizeVkn(input: unknown): string {
-  return String(input ?? '').replace(/[\s\-]/g, '').replace(/[^0-9]/g, '');
+  return String(input ?? '').replace(/[\s-]/g, '').replace(/[^0-9]/g, '');
 }
 
 export function isValidVkn(input: unknown): boolean {

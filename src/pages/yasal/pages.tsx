@@ -123,9 +123,9 @@ export function DistanceSalesPage() {
       </p>
       <h2 className="font-heading font-semibold text-foreground-950 text-base">Ödeme</h2>
       <p>
-        Kart ile tahsilat iyzico altyapısı üzerinden yapılır (3D Secure). Canlı tahsilat iyzico
-        üye işyeri onayı sonrası aktiftir; onay öncesinde sipariş kaydı oluşturulur ve admin
-        incelemesiyle hak tanımlanabilir.
+        Kart ile tahsilat iyzico altyapısı üzerinden 3D Secure ile yapılır; kart bilgileri
+        Platform’da saklanmaz. Ödeme onaylandığında ilan yayınlama hakkı hesabınıza otomatik
+        tanımlanır ve e-posta ile bilgilendirilirsiniz.
       </p>
     </LegalLayout>
   );
@@ -137,6 +137,60 @@ function formatPriceInline(n: number) {
     currency: 'TRY',
     maximumFractionDigits: 0,
   }).format(n);
+}
+
+export function TermsPage() {
+  return (
+    <LegalLayout title="Kullanım Koşulları" path="/kullanim-kosullari">
+      <p>
+        İzmir İş İlanları 35 (“Platform”)’u kullanan herkes bu koşulları kabul etmiş sayılır.
+        Adaylar için hizmet ücretsizdir; işverenler ilan yayınlama paketleri satın alır.
+      </p>
+      <h2 className="font-heading font-semibold text-foreground-950 text-base">Üyelik</h2>
+      <ul className="list-disc pl-5 space-y-1">
+        <li>Kayıt sırasında verilen bilgilerin doğru ve güncel olması kullanıcının sorumluluğundadır.</li>
+        <li>Hesap güvenliği (şifre gizliliği) kullanıcıya aittir.</li>
+        <li>İşveren hesapları ilan yayınlamadan önce Platform tarafından doğrulanır.</li>
+      </ul>
+      <h2 className="font-heading font-semibold text-foreground-950 text-base">İlan kuralları</h2>
+      <ul className="list-disc pl-5 space-y-1">
+        <li>İlanlar gerçek bir iş pozisyonuna ait olmalıdır; yanıltıcı, ayrımcı veya yasa dışı içerik yayınlanamaz.</li>
+        <li>Adaylardan ücret talep eden, saadet zinciri veya benzeri ilanlar yasaktır.</li>
+        <li>Platform, kurallara aykırı ilanları önceden bildirimde bulunmaksızın yayından kaldırabilir.</li>
+      </ul>
+      <h2 className="font-heading font-semibold text-foreground-950 text-base">Kişisel veriler</h2>
+      <p>
+        Başvurularla paylaşılan aday bilgileri yalnızca ilgili işe alım süreci için kullanılabilir.
+        Ayrıntılar için{' '}
+        <Link to="/kvkk" className="text-primary-600 hover:underline">
+          KVKK Aydınlatma Metni
+        </Link>{' '}
+        ve{' '}
+        <Link to="/gizlilik" className="text-primary-600 hover:underline">
+          Gizlilik Politikası
+        </Link>
+        .
+      </p>
+      <h2 className="font-heading font-semibold text-foreground-950 text-base">Ücretli hizmetler</h2>
+      <p>
+        Paket satışları{' '}
+        <Link to="/mesafeli-satis" className="text-primary-600 hover:underline">
+          Mesafeli Satış Sözleşmesi
+        </Link>{' '}
+        ve{' '}
+        <Link to="/iade-iptal" className="text-primary-600 hover:underline">
+          İade ve İptal Politikası
+        </Link>{' '}
+        kapsamındadır.
+      </p>
+      <h2 className="font-heading font-semibold text-foreground-950 text-base">Sorumluluk</h2>
+      <p>
+        Platform, işveren ile aday arasında aracılık eder; işe alım kararları ve iş ilişkisinden
+        doğan yükümlülükler taraflara aittir. Platform bu koşulları güncelleyebilir; güncel metin
+        bu sayfada yayımlanır.
+      </p>
+    </LegalLayout>
+  );
 }
 
 export function RefundPage() {

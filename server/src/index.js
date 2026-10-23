@@ -470,6 +470,32 @@ app.get('/', (_req, res) => {
   res.json({ ok: true, service: 'izmir-api', health: '/api/health' });
 });
 
+/** Aktif ilanlar için sitemap — robots.txt içinden referans verilir */
+app.get('/sitemap-jobs.xml', async (_req, res) => {
+  const site = (process.env.PUBLIC_SITE_URL || 'https://izmirisilanlari35.com').replace(/\/$/, '');
+  const esc = (s) =>
+    String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, slug, updated_at, created_at FROM jobs WHERE status = 'active' ORDER BY created_at DESC LIMIT 5000`,
+    );
+    const urls = rows
+      .map((j) => {
+        const key = encodeURIComponent(j.slug || j.id);
+        const last = new Date(j.updated_at || j.created_at || Date.now()).toISOString();
+        return `  <url><loc>${esc(`${site}/ilan/${key}`)}</loc><lastmod>${last}</lastmod><changefreq>daily</changefreq><priority>0.7</priority></url>`;
+      })
+      .join('\n');
+    res
+      .type('application/xml')
+      .set('Cache-Control', 'public, max-age=3600')
+      .send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`);
+  } catch (e) {
+    logError('sitemap jobs', { error: e.message });
+    res.status(500).type('text/plain').send('sitemap error');
+  }
+});
+
 app.get('/api/health', async (_req, res) => {
   try {
     await pool.query('SELECT 1');
