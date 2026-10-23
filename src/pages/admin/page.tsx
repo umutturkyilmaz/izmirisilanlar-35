@@ -23,6 +23,28 @@ interface EmployerProfile {
   dogrulama_talebi_tarihi: string | null;
   dogrulanma_tarihi: string | null;
   created_at: string;
+  email?: string;
+  email_verified?: boolean;
+  risk_level?: 'low' | 'medium' | 'high' | null;
+  risk_checks?: { key: string; label: string; ok: boolean }[] | null;
+  dogrulama_yontemi?: 'auto' | 'manual' | null;
+}
+
+const RISK_BADGE: Record<string, [string, string]> = {
+  low: ['Düşük risk', 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'],
+  medium: ['Orta risk', 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'],
+  high: ['Yüksek risk', 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'],
+};
+
+function RiskBadge({ level, method }: { level?: string | null; method?: string | null }) {
+  if (!level && method !== 'auto') return null;
+  const [label, cls] = RISK_BADGE[level || ''] || ['Kontrol yok', 'bg-background-200 text-foreground-700'];
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap ${cls}`}>
+      {label}
+      {method === 'auto' ? ' · otomatik onay' : ''}
+    </span>
+  );
 }
 
 interface JobWithEmployer {
@@ -140,6 +162,35 @@ export default function AdminPage() {
       await fetchEmployers();
     } catch (err) {
       setEmpActionMsg({ type: 'error', text: err instanceof Error ? err.message : 'Onaylama başarısız oldu.' });
+    } finally {
+      setEmpActionLoading(null);
+    }
+  };
+
+  const handleAssessEmployer = async (employerId: string) => {
+    setEmpActionLoading(employerId);
+    setEmpActionMsg(null);
+    try {
+      const r = await api<{
+        message?: string;
+        level: EmployerProfile['risk_level'];
+        checks: EmployerProfile['risk_checks'];
+        autoVerified?: boolean;
+      }>(`/api/admin/users/${employerId}/assess`, { method: 'POST', body: {} });
+      setEmpActionMsg({ type: 'success', text: r.message || 'Kontrol tamamlandı.' });
+      setEmpDetailModal((m) =>
+        m && m.id === employerId
+          ? {
+              ...m,
+              risk_level: r.level,
+              risk_checks: r.checks,
+              ...(r.autoVerified ? { dogrulama_durumu: 'verified' as const, dogrulama_yontemi: 'auto' as const } : {}),
+            }
+          : m,
+      );
+      await fetchEmployers();
+    } catch (err) {
+      setEmpActionMsg({ type: 'error', text: err instanceof Error ? err.message : 'Kontrol başarısız oldu.' });
     } finally {
       setEmpActionLoading(null);
     }
@@ -590,6 +641,9 @@ export default function AdminPage() {
                               <div>
                                 <p className="text-sm font-medium text-foreground-950">{emp.company_name || 'Belirtilmemiş'}</p>
                                 <p className="text-xs text-foreground-500 mt-0.5">{emp.full_name || '—'}</p>
+                                <div className="mt-1">
+                                  <RiskBadge level={emp.risk_level} method={emp.dogrulama_yontemi} />
+                                </div>
                               </div>
                             </td>
                             <td className="px-4 py-3 hidden md:table-cell">
@@ -893,6 +947,47 @@ export default function AdminPage() {
               <div className="text-sm">
                 <p className="text-xs text-foreground-400 mb-0.5">Doğrulama Talebi</p>
                 <p className="text-foreground-700">{formatDate(empDetailModal.dogrulama_talebi_tarihi)}</p>
+              </div>
+              <div className="text-sm rounded-lg border border-background-200 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-foreground-700">Otomatik ön kontrol</p>
+                  <RiskBadge level={empDetailModal.risk_level} method={empDetailModal.dogrulama_yontemi} />
+                </div>
+                {empDetailModal.email && (
+                  <p className="text-xs text-foreground-500 break-all">{empDetailModal.email}</p>
+                )}
+                {empDetailModal.risk_checks?.length ? (
+                  <ul className="space-y-1">
+                    {empDetailModal.risk_checks.map((c) => (
+                      <li key={c.key} className="flex items-center gap-2 text-xs">
+                        <i className={c.ok ? 'ri-checkbox-circle-fill text-green-600' : 'ri-close-circle-fill text-red-500'} />
+                        <span className="text-foreground-700">{c.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-foreground-500">Henüz kontrol edilmedi.</p>
+                )}
+                <div className="flex flex-wrap gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => void handleAssessEmployer(empDetailModal.id)}
+                    className="text-xs font-semibold text-primary-600 hover:underline"
+                  >
+                    Kontrolü yeniden çalıştır
+                  </button>
+                  <a
+                    href="https://dijital.gib.gov.tr/portal/vkndogrulama"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-primary-600 hover:underline"
+                  >
+                    GİB’de VKN doğrula ↗
+                  </a>
+                </div>
+                <p className="text-[11px] text-foreground-400">
+                  Ön kontrol resmi mükellef sorgusu değildir; şüpheli durumda GİB’den doğrulayın.
+                </p>
               </div>
               {empDetailModal.dogrulanma_tarihi && (
                 <div className="text-sm">

@@ -21,6 +21,7 @@ import {
 import { getServerPackage, packageCreditsMeta } from './packages.js';
 import { assertUploadContent, publicError } from './security.js';
 import { isValidVkn, normalizeVkn } from './vkn.js';
+import { assessEmployer } from './employerRisk.js';
 import {
   isMailReady,
   sendPasswordResetEmail,
@@ -149,6 +150,9 @@ async function ensureSchema() {
     `ALTER TABLE users ADD COLUMN education_level VARCHAR(64) NULL`,
     `ALTER TABLE users ADD COLUMN experience_level VARCHAR(64) NULL`,
     `ALTER TABLE users ADD COLUMN token_version INT NOT NULL DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN risk_level VARCHAR(8) NULL`,
+    `ALTER TABLE users ADD COLUMN risk_checks JSON NULL`,
+    `ALTER TABLE users ADD COLUMN dogrulama_yontemi VARCHAR(16) NULL`,
   ]) {
     try {
       await pool.query(sql);
@@ -441,11 +445,69 @@ function signUser(user, remember = false) {
 
 function profileRow(row) {
   if (!row) return null;
-  const { password_hash, token_version, ...rest } = row;
+  const { password_hash, token_version, risk_level, risk_checks, ...rest } = row;
   return {
     ...rest,
     email_verified: row.email_verified === undefined ? true : !!row.email_verified,
   };
+}
+
+/** İşvereni doğrulanmış yap + bildirim/e-posta. method: 'auto' | 'manual' */
+async function markEmployerVerified(userId, method) {
+  const [upd] = await pool.query(
+    `UPDATE users SET dogrulama_durumu = 'verified', dogrulanma_tarihi = NOW(), dogrulama_yontemi = :m
+     WHERE id = :id AND dogrulama_durumu <> 'verified'`,
+    { id: userId, m: method },
+  );
+  if (!upd.affectedRows) return false;
+  const [urows] = await pool.query('SELECT email, company_name, full_name FROM users WHERE id = ?', [userId]);
+  const u = urows[0];
+  if (u) {
+    await pool.query(
+      `INSERT INTO notifications (id, user_id, title, body, link, \`read\`) VALUES (?, ?, ?, ?, ?, 0)`,
+      [
+        uid(),
+        userId,
+        'Hesabınız onaylandı',
+        'İşveren hesabınız doğrulandı. Artık paket satın alıp ilan yayınlayabilirsiniz.',
+        '/paketler',
+      ],
+    );
+    void sendEmployerVerifiedEmail(u.email, u.company_name || u.full_name);
+  }
+  return true;
+}
+
+/**
+ * İşveren ön kontrolünü çalıştırıp kaydeder; düşük riskli ve bekleyen hesabı otomatik onaylar.
+ * Hatalar kayıt/doğrulama akışını bozmaz.
+ */
+async function assessAndMaybeVerifyEmployer(userId, { autoApprove = true } = {}) {
+  try {
+    const [rows] = await pool.query('SELECT * FROM users WHERE id = ? LIMIT 1', [userId]);
+    const user = rows[0];
+    if (!user || user.role !== 'employer') return null;
+    const vkn = normalizeVkn(user.vergi_numarasi);
+    const [[dup]] = await pool.query(
+      `SELECT COUNT(*) AS c FROM users WHERE vergi_numarasi = ? AND id <> ? AND role = 'employer'`,
+      [vkn || '__none__', userId],
+    );
+    const result = await assessEmployer(user, Number(dup?.c || 0));
+    await pool.query('UPDATE users SET risk_level = ?, risk_checks = ? WHERE id = ?', [
+      result.level,
+      JSON.stringify(result.checks),
+      userId,
+    ]);
+    let autoVerified = false;
+    if (autoApprove && result.level === 'low' && user.dogrulama_durumu === 'pending') {
+      autoVerified = await markEmployerVerified(userId, 'auto');
+      if (autoVerified) logInfo('employer auto-verified', { userId });
+    }
+    return { ...result, autoVerified };
+  } catch (e) {
+    logError('employer assess', { userId, error: e.message });
+    return null;
+  }
 }
 
 async function auth(req, res, next) {
@@ -600,6 +662,7 @@ app.post('/api/auth/register', async (req, res) => {
       [verifyToken, id],
     );
     void sendEmailVerification(user.email, verifyToken);
+    if (role === 'employer') void assessAndMaybeVerifyEmployer(id);
     const token = signUser(user);
     res.json({
       token,
@@ -680,7 +743,13 @@ app.post('/api/auth/verify-email', async (req, res) => {
   if (!row) return res.status(400).json({ error: 'Geçersiz veya süresi dolmuş bağlantı' });
   await pool.query('UPDATE users SET email_verified = 1 WHERE id = ?', [row.user_id]);
   await pool.query('DELETE FROM email_verifications WHERE user_id = ?', [row.user_id]);
-  res.json({ ok: true, message: 'E-posta adresiniz doğrulandı. Giriş yapabilirsiniz.' });
+  const assessed = await assessAndMaybeVerifyEmployer(row.user_id);
+  res.json({
+    ok: true,
+    message: assessed?.autoVerified
+      ? 'E-posta adresiniz doğrulandı ve işveren hesabınız onaylandı. Paket satın alıp ilan yayınlayabilirsiniz.'
+      : 'E-posta adresiniz doğrulandı. Giriş yapabilirsiniz.',
+  });
 });
 
 app.post('/api/auth/resend-verification', auth, async (req, res) => {
@@ -749,6 +818,9 @@ app.patch('/api/auth/profile', auth, async (req, res) => {
     }
     if (!sets.length) return res.status(400).json({ error: 'Güncellenecek alan yok' });
     await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = :id`, params);
+    if (req.user.role === 'employer' && req.user.dogrulama_durumu !== 'verified') {
+      await assessAndMaybeVerifyEmployer(req.user.id);
+    }
     const [rows] = await pool.query('SELECT * FROM users WHERE id = :id', { id: req.user.id });
     res.json({ profile: profileRow(rows[0]) });
   } catch (e) {
@@ -887,6 +959,7 @@ app.post('/api/auth/google', async (req, res) => {
           dogrulama,
         },
       );
+      if (roleWanted === 'employer') await assessAndMaybeVerifyEmployer(id);
       const [rows] = await pool.query('SELECT * FROM users WHERE id = :id', { id });
       user = rows[0];
     }
@@ -2545,10 +2618,30 @@ app.delete('/api/admin/ads/:id', auth, async (req, res) => {
 app.get('/api/admin/users', auth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
   const [rows] = await pool.query(
-    `SELECT id, email, role, full_name, company_name, phone, city, vergi_numarasi, dogrulama_durumu, dogrulama_talebi_tarihi, dogrulanma_tarihi, created_at
+    `SELECT id, email, role, full_name, company_name, phone, city, vergi_numarasi, dogrulama_durumu, dogrulama_talebi_tarihi, dogrulanma_tarihi, created_at,
+            email_verified, risk_level, risk_checks, dogrulama_yontemi
      FROM users ORDER BY created_at DESC LIMIT 500`,
   );
-  res.json(rows);
+  res.json(
+    rows.map((r) => ({
+      ...r,
+      email_verified: r.email_verified === undefined ? true : !!r.email_verified,
+      risk_checks: typeof r.risk_checks === 'string' ? JSON.parse(r.risk_checks) : r.risk_checks || null,
+    })),
+  );
+});
+
+/** Admin: işveren ön kontrolünü yeniden çalıştır (düşük riskliyse otomatik onaylar) */
+app.post('/api/admin/users/:id/assess', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const result = await assessAndMaybeVerifyEmployer(req.params.id);
+  if (!result) return res.status(400).json({ error: 'İşveren bulunamadı veya kontrol yapılamadı' });
+  const labels = { low: 'Düşük', medium: 'Orta', high: 'Yüksek' };
+  res.json({
+    ok: true,
+    ...result,
+    message: `Risk: ${labels[result.level]}${result.autoVerified ? ' — otomatik onaylandı' : ''}`,
+  });
 });
 
 app.patch('/api/admin/users/:id', auth, async (req, res) => {
@@ -2556,29 +2649,7 @@ app.patch('/api/admin/users/:id', auth, async (req, res) => {
   const { dogrulama_durumu, role } = req.body || {};
   if (dogrulama_durumu) {
     if (dogrulama_durumu === 'verified') {
-      await pool.query(
-        `UPDATE users SET dogrulama_durumu = :d, dogrulanma_tarihi = NOW() WHERE id = :id`,
-        { d: dogrulama_durumu, id: req.params.id },
-      );
-      const [urows] = await pool.query('SELECT email, company_name, full_name FROM users WHERE id = ?', [
-        req.params.id,
-      ]);
-      const u = urows[0];
-      if (u) {
-        const notifId = uid();
-        await pool.query(
-          `INSERT INTO notifications (id, user_id, title, body, link, \`read\`)
-           VALUES (?, ?, ?, ?, ?, 0)`,
-          [
-            notifId,
-            req.params.id,
-            'Hesabınız onaylandı',
-            'İşveren hesabınız doğrulandı. Artık ilan yayınlayabilirsiniz.',
-            '/ilan-ekle',
-          ],
-        );
-        void sendEmployerVerifiedEmail(u.email, u.company_name || u.full_name);
-      }
+      await markEmployerVerified(req.params.id, 'manual');
     } else {
       await pool.query(`UPDATE users SET dogrulama_durumu = :d WHERE id = :id`, {
         d: dogrulama_durumu,
@@ -2732,6 +2803,18 @@ function startExpireScheduler() {
   };
   setTimeout(refundTick, 60 * 1000);
   setInterval(refundTick, 30 * 60 * 1000);
+
+  // Onay bekleyen işverenleri değerlendir (düşük risk → otomatik onay)
+  setTimeout(async () => {
+    try {
+      const [rows] = await pool.query(
+        `SELECT id FROM users WHERE role = 'employer' AND dogrulama_durumu = 'pending' LIMIT 200`,
+      );
+      for (const r of rows) await assessAndMaybeVerifyEmployer(r.id);
+    } catch (e) {
+      logError('pending employer assess', { error: e.message });
+    }
+  }, 20 * 1000);
 }
 
 app.use((err, req, res, _next) => {
