@@ -33,7 +33,9 @@ import {
   sendEmailVerification,
   sendPaymentReceiptEmail,
   sendPaymentAdminNotifyEmail,
+  sendBackupEmail,
 } from './mail.js';
+import { createBackup, EMAIL_ATTACHMENT_LIMIT } from './backup.js';
 import { OAuth2Client } from 'google-auth-library';
 
 function logInfo(msg, extra = {}) {
@@ -160,6 +162,13 @@ async function ensureSchema() {
       /* already exists */
     }
   }
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_meta (
+      meta_key VARCHAR(64) PRIMARY KEY,
+      meta_value TEXT NULL,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS password_resets (
       token CHAR(64) PRIMARY KEY,
@@ -2778,6 +2787,58 @@ app.post('/api/jobs/expire', async (req, res) => {
   }
 });
 
+/** Günlük yedeği e-posta ile gönderir; Gmail sınırını aşarsa dosya içerikleri hariç tutulur. */
+async function runEmailBackup() {
+  if (!isMailReady()) throw new Error('SMTP yapılandırılmamış');
+  let backup = await createBackup(pool, { includeBlobs: true });
+  if (backup.buffer.length > EMAIL_ATTACHMENT_LIMIT) {
+    backup = await createBackup(pool, { includeBlobs: false });
+  }
+  if (backup.buffer.length > EMAIL_ATTACHMENT_LIMIT) {
+    throw new Error(`Yedek e-posta için çok büyük (${(backup.buffer.length / 1024 / 1024).toFixed(1)} MB)`);
+  }
+  await sendBackupEmail(backup);
+  await pool.query(
+    `INSERT INTO app_meta (meta_key, meta_value) VALUES ('last_backup_at', :v)
+     ON DUPLICATE KEY UPDATE meta_value = VALUES(meta_value)`,
+    { v: new Date().toISOString() },
+  );
+  logInfo('email backup sent', { bytes: backup.buffer.length, includeBlobs: backup.includeBlobs });
+  return backup;
+}
+
+app.get('/api/admin/backup', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  try {
+    const backup = await createBackup(pool, { includeBlobs: true });
+    res.set({
+      'Content-Type': 'application/gzip',
+      'Content-Disposition': `attachment; filename="${backup.filename}"`,
+      'Cache-Control': 'no-store',
+    });
+    res.send(backup.buffer);
+  } catch (e) {
+    logError('backup download', { error: e.message });
+    res.status(500).json({ error: `Yedek alınamadı: ${e.message}` });
+  }
+});
+
+app.post('/api/admin/backup/email', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  try {
+    const backup = await runEmailBackup();
+    res.json({
+      ok: true,
+      message: `Yedek e-postayla gönderildi (${(backup.buffer.length / 1024 / 1024).toFixed(1)} MB${
+        backup.includeBlobs ? '' : ', dosya içerikleri hariç'
+      }).`,
+    });
+  } catch (e) {
+    logError('backup email', { error: e.message });
+    res.status(500).json({ error: `Yedek gönderilemedi: ${e.message}` });
+  }
+});
+
 /** Harici cron-job.org gerekmez — API saatte bir süresi biten ilanları kapatır. */
 function startExpireScheduler() {
   const HOUR_MS = 60 * 60 * 1000;
@@ -2803,6 +2864,21 @@ function startExpireScheduler() {
   };
   setTimeout(refundTick, 60 * 1000);
   setInterval(refundTick, 30 * 60 * 1000);
+
+  // Railway yedeği yok: 24 saatte bir veritabanı yedeği e-postayla
+  const backupTick = async () => {
+    if (!isMailReady()) return;
+    try {
+      const [[row]] = await pool.query(`SELECT meta_value FROM app_meta WHERE meta_key = 'last_backup_at'`);
+      const last = row?.meta_value ? new Date(row.meta_value).getTime() : 0;
+      if (Date.now() - last < 23.5 * 60 * 60 * 1000) return;
+      await runEmailBackup();
+    } catch (e) {
+      logError('backup scheduler', { error: e.message });
+    }
+  };
+  setTimeout(backupTick, 3 * 60 * 1000);
+  setInterval(backupTick, HOUR_MS);
 
   // Onay bekleyen işverenleri değerlendir (düşük risk → otomatik onay)
   setTimeout(async () => {

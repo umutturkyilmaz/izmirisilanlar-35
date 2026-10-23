@@ -25,15 +25,31 @@ function getTransporter() {
   return transporter;
 }
 
-export async function sendMail({ to, subject, text, html }) {
+export async function sendMail({ to, subject, text, html, attachments }) {
   const tx = getTransporter();
   if (!tx) {
     console.warn('[mail] SMTP yok — atlandı:', subject, '→', to);
     return { ok: false, skipped: true };
   }
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-  await tx.sendMail({ from, to, subject, text, html: html || text });
+  await tx.sendMail({ from, to, subject, text, html: html || text, attachments });
   return { ok: true };
+}
+
+export async function sendBackupEmail({ filename, buffer, counts, includeBlobs }) {
+  const summary = Object.entries(counts)
+    .map(([t, n]) => `${t}: ${n}`)
+    .join('\n');
+  return sendMail({
+    to: process.env.BACKUP_EMAIL_TO || adminNotifyTo(),
+    subject: `Veritabanı yedeği — ${new Date().toLocaleDateString('tr-TR')}`,
+    text: `İzmir İş İlanları 35 günlük veritabanı yedeği ektedir (${(buffer.length / 1024 / 1024).toFixed(1)} MB).\n${
+      includeBlobs
+        ? 'Yüklenen dosyalar (CV, görseller) dahildir.'
+        : 'Boyut sınırı nedeniyle yüklenen dosyaların içeriği hariçtir; tam yedek için Admin → Yedek İndir.'
+    }\n\nKayıt sayıları:\n${summary}\n\nGeri yükleme: server/scripts/restore-backup.mjs`,
+    attachments: [{ filename, content: buffer, contentType: 'application/gzip' }],
+  });
 }
 
 export async function sendPasswordResetEmail(email, token) {

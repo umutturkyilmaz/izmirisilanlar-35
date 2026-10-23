@@ -8,6 +8,7 @@ import { jobEditPath } from '@/lib/jobPath';
 import PaymentsSection from '@/pages/admin/components/PaymentsSection';
 import ContactMessagesSection from '@/pages/admin/components/ContactMessagesSection';
 import AdsSection from '@/pages/admin/components/AdsSection';
+import BackupPanel from '@/pages/admin/components/BackupPanel';
 
 const DashboardSection = lazy(() => import('@/pages/admin/components/DashboardSection'));
 
@@ -889,6 +890,7 @@ export default function AdminPage() {
             </div>
           )}
 
+          {mainTab === 'stats' && <BackupPanel />}
           {mainTab === 'stats' && (
             <Suspense
               fallback={
