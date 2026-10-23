@@ -105,6 +105,33 @@ export async function sendApplicationStatusEmail(email, jobTitle, status) {
   });
 }
 
+function adminNotifyTo() {
+  return (
+    process.env.PAYMENT_NOTIFY_TO ||
+    process.env.CONTACT_NOTIFY_TO ||
+    process.env.SMTP_FROM?.match(/<([^>]+)>/)?.[1] ||
+    process.env.SMTP_USER ||
+    'umutata355@gmail.com'
+  );
+}
+
+export async function sendPaymentReceiptEmail(email, { packageName, amount, orderRef }) {
+  if (!email) return { ok: false, skipped: true };
+  return sendMail({
+    to: email,
+    subject: `Ödemeniz alındı — ${packageName}`,
+    text: `Merhaba,\n\n${packageName} paketi için ${amount} TL ödemeniz alındı ve ilan hakkınız tanımlandı.\nSipariş referansı: ${orderRef}\n\nİlan yayınlamak için: ${siteUrl()}/ilan-ekle\n\n— İzmir İş İlanları 35`,
+  });
+}
+
+export async function sendPaymentAdminNotifyEmail({ packageName, amount, buyer, orderRef }) {
+  return sendMail({
+    to: adminNotifyTo(),
+    subject: `Yeni ödeme: ${packageName} — ${amount} TL`,
+    text: `iyzico ile yeni ödeme alındı.\n\nPaket: ${packageName}\nTutar: ${amount} TL\nAlıcı: ${buyer || '—'}\nReferans: ${orderRef}\n\nAdmin paneli: ${siteUrl()}/admin`,
+  });
+}
+
 export async function sendEmailVerification(email, token) {
   const link = `${siteUrl()}/email-dogrula?token=${encodeURIComponent(token)}`;
   return sendMail({

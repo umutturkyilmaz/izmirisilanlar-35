@@ -23,6 +23,8 @@ import {
   sendEmployerVerifiedEmail,
   sendApplicationStatusEmail,
   sendEmailVerification,
+  sendPaymentReceiptEmail,
+  sendPaymentAdminNotifyEmail,
 } from './mail.js';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -1559,6 +1561,13 @@ app.get('/api/payments/iyzico/status', (_req, res) => {
   });
 });
 
+/** iyzico gsmNumber: +90XXXXXXXXXX */
+function toIyzicoGsm(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  const local = digits.replace(/^(90|0)/, '');
+  return local.length === 10 ? `+90${local}` : '+905350000000';
+}
+
 async function grantCreditsForPayment(connOrPool, payment, meta) {
   const db = connOrPool || pool;
   const [existing] = await db.query(
@@ -1706,7 +1715,7 @@ app.post('/api/payments/checkout', auth, async (req, res) => {
         name: nameParts[0] || 'Musteri',
         surname: nameParts.slice(1).join(' ') || 'Hesap',
         email: b.buyer_email || req.user.email,
-        gsmNumber: b.buyer_phone || '+905350000000',
+        gsmNumber: toIyzicoGsm(b.buyer_phone),
         identityNumber: (b.tax_id || '11111111111').replace(/\D/g, '').slice(0, 11) || '11111111111',
         address: b.billing_address || 'Turkiye',
         city: 'Izmir',
@@ -1752,6 +1761,12 @@ app.post('/api/admin/payments/:id/approve', auth, async (req, res) => {
     if (!payment) {
       await conn.rollback();
       return res.status(404).json({ error: 'Sipariş yok' });
+    }
+    if (payment.status === 'pending_iyzico' && isIyzicoReady()) {
+      await conn.rollback();
+      return res.status(400).json({
+        error: 'iyzico siparişi elle onaylanamaz — “iyzico’dan doğrula” ile tahsilatı kontrol edin',
+      });
     }
     if (!['pending_admin', 'pending_iyzico'].includes(payment.status)) {
       await conn.rollback();
@@ -1822,16 +1837,17 @@ app.post('/api/admin/payments/:id/reject', auth, async (req, res) => {
   res.json({ ok: true, status: 'admin_rejected' });
 });
 
-/** iyzico Checkout Form callback (POST token) — idempotent + paidPrice kontrolü */
-app.post('/api/payments/iyzico/callback', express.urlencoded({ extended: true }), async (req, res) => {
-  const siteUrl = (process.env.PUBLIC_SITE_URL || 'https://izmirisilanlari35.com').replace(/\/$/, '');
+/**
+ * iyzico ödemesini token ile kesinleştirir — callback ve admin doğrulaması ortak kullanır.
+ * Idempotent; tutar kontrolü sunucu kataloğuna göre yapılır.
+ * @returns {Promise<{ outcome: 'paid'|'already_paid'|'failed'|'amount_mismatch'|'not_found'|'token_mismatch', payment?: object }>}
+ */
+async function settleIyzicoPayment(token, expectedPaymentId = null) {
+  const result = await retrieveCheckoutForm(token);
   const conn = await pool.getConnection();
+  let outcome;
+  let payment;
   try {
-    const token = req.body?.token || req.query?.token;
-    if (!token) {
-      return res.redirect(`${siteUrl}/odeme/iptal?reason=no_token`);
-    }
-    const result = await retrieveCheckoutForm(token);
     await conn.beginTransaction();
     // retrieve yanıtındaki conversationId, istekte gönderilmezse boş döner; token ve basketId güvenilir
     const [rows] = await conn.query(
@@ -1845,31 +1861,27 @@ app.post('/api/payments/iyzico/callback', express.urlencoded({ extended: true })
         conversationId: result.conversationId || '',
       },
     );
-    const payment = rows[0];
-    if (!payment) {
+    payment = rows[0];
+    if (!payment || (expectedPaymentId && payment.id !== expectedPaymentId)) {
       await conn.rollback();
-      logError('iyzico callback payment not found', {
+      logError('iyzico settle payment not found', {
         basketId: result.basketId,
-        conversationId: result.conversationId,
         status: result.status,
         paymentStatus: result.paymentStatus,
         errorMessage: result.errorMessage,
       });
-      return res.redirect(`${siteUrl}/odeme/iptal?reason=payment_not_found`);
+      return { outcome: 'not_found' };
     }
-    const paymentId = payment.id;
 
     if (['paid', 'admin_approved'].includes(payment.status)) {
       await conn.commit();
-      return res.redirect(
-        `${siteUrl}/odeme/basarili?paket=${encodeURIComponent(payment.package_id)}&payment=${paymentId}&ok=1`,
-      );
+      return { outcome: 'already_paid', payment };
     }
 
     if (payment.iyzico_token && payment.iyzico_token !== token) {
       await conn.rollback();
-      logError('iyzico token mismatch', { paymentId });
-      return res.redirect(`${siteUrl}/odeme/iptal?reason=error`);
+      logError('iyzico token mismatch', { paymentId: payment.id });
+      return { outcome: 'token_mismatch', payment };
     }
 
     // status === 'success' yalnızca sorgunun başarılı olduğunu söyler; tahsilat paymentStatus ile kesinleşir
@@ -1886,57 +1898,129 @@ app.post('/api/payments/iyzico/callback', express.urlencoded({ extended: true })
         paid < expected - 0.05
       ) {
         await conn.query(`UPDATE job_payments SET status = 'amount_mismatch' WHERE id = :id`, {
-          id: paymentId,
+          id: payment.id,
         });
         await conn.commit();
-        logError('iyzico amount mismatch', {
-          paymentId,
-          expected,
-          paid,
-        });
-        return res.redirect(`${siteUrl}/odeme/iptal?reason=amount_mismatch`);
+        logError('iyzico amount mismatch', { paymentId: payment.id, expected, paid });
+        return { outcome: 'amount_mismatch', payment };
       }
 
-      let meta = packageCreditsMeta(
+      const meta = packageCreditsMeta(
         catalog || { duration_days: 7, credits_count: 1, featured_count: 0 },
       );
-      try {
-        const parsed =
-          typeof payment.credits_meta === 'string'
-            ? JSON.parse(payment.credits_meta)
-            : payment.credits_meta;
-        if (parsed?.credits_count) meta = { ...meta, ...parsed };
-      } catch {
-        /* keep */
-      }
-      if (catalog) meta = packageCreditsMeta(catalog);
-
       const [upd] = await conn.query(
-        `UPDATE job_payments SET status = 'paid', iyzico_payment_id = :pid WHERE id = :id AND status IN ('pending_iyzico','pending_admin')`,
-        { pid: String(result.paymentId || result.paymentIdList || token), id: paymentId },
+        `UPDATE job_payments SET status = 'paid', iyzico_payment_id = :pid WHERE id = :id AND status IN ('pending_iyzico','pending_admin','failed')`,
+        { pid: String(result.paymentId || result.paymentIdList || token), id: payment.id },
       );
       if (upd.affectedRows) {
         await grantCreditsForPayment(conn, payment, meta);
       }
       await conn.commit();
-      return res.redirect(
-        `${siteUrl}/odeme/basarili?paket=${encodeURIComponent(payment.package_id)}&payment=${paymentId}&ok=1`,
+      outcome = upd.affectedRows ? 'paid' : 'already_paid';
+    } else {
+      // Tahsilat yoksa siparişi kapat; ileride başarılı doğrulanırsa 'failed' → 'paid' geçişi yukarıda mümkün
+      await conn.query(
+        `UPDATE job_payments SET status = 'failed' WHERE id = :id AND status IN ('pending_iyzico','pending_admin')`,
+        { id: payment.id },
       );
+      await conn.commit();
+      return { outcome: 'failed', payment };
     }
-
-    await conn.query(`UPDATE job_payments SET status = 'failed' WHERE id = :id`, { id: paymentId });
-    await conn.commit();
-    return res.redirect(`${siteUrl}/odeme/iptal?reason=failed`);
   } catch (e) {
     try {
       await conn.rollback();
     } catch {
       /* ignore */
     }
-    logError('iyzico callback', { error: e.message });
-    return res.redirect(`${siteUrl}/odeme/iptal?reason=error`);
+    throw e;
   } finally {
     conn.release();
+  }
+
+  if (outcome === 'paid') {
+    const orderRef = String(payment.id).slice(0, 12).toUpperCase();
+    try {
+      await notifyEmployerPackage(
+        payment.employer_id,
+        'Ödeme onaylandı',
+        `${payment.package_name} paketiniz için ilan yayınlama hakkınız tanımlandı.`,
+      );
+    } catch (e) {
+      logError('payment notify', { error: e.message });
+    }
+    let buyerEmail = payment.buyer_email;
+    if (!buyerEmail) {
+      const [[u]] = await pool.query(`SELECT email FROM users WHERE id = :id LIMIT 1`, {
+        id: payment.employer_id,
+      });
+      buyerEmail = u?.email || null;
+    }
+    void sendPaymentReceiptEmail(buyerEmail, {
+      packageName: payment.package_name,
+      amount: payment.amount,
+      orderRef,
+    }).catch((e) => logError('payment receipt mail', { error: e.message }));
+    void sendPaymentAdminNotifyEmail({
+      packageName: payment.package_name,
+      amount: payment.amount,
+      buyer: [payment.buyer_name || payment.company_name, buyerEmail].filter(Boolean).join(' · '),
+      orderRef,
+    }).catch((e) => logError('payment admin mail', { error: e.message }));
+  }
+  return { outcome, payment };
+}
+
+/** iyzico Checkout Form callback (POST token) */
+app.post('/api/payments/iyzico/callback', express.urlencoded({ extended: true }), async (req, res) => {
+  const siteUrl = (process.env.PUBLIC_SITE_URL || 'https://izmirisilanlari35.com').replace(/\/$/, '');
+  const token = req.body?.token || req.query?.token;
+  if (!token) {
+    return res.redirect(`${siteUrl}/odeme/iptal?reason=no_token`);
+  }
+  try {
+    const { outcome, payment } = await settleIyzicoPayment(String(token));
+    if (outcome === 'paid' || outcome === 'already_paid') {
+      return res.redirect(
+        `${siteUrl}/odeme/basarili?paket=${encodeURIComponent(payment.package_id)}&payment=${payment.id}&ok=1`,
+      );
+    }
+    const reason =
+      outcome === 'not_found'
+        ? 'payment_not_found'
+        : outcome === 'token_mismatch'
+          ? 'error'
+          : outcome;
+    return res.redirect(`${siteUrl}/odeme/iptal?reason=${reason}`);
+  } catch (e) {
+    logError('iyzico callback', { error: e.message });
+    return res.redirect(`${siteUrl}/odeme/iptal?reason=error`);
+  }
+});
+
+/** Admin: bekleyen/başarısız iyzico siparişini iyzico'dan sorgulayıp kesinleştir */
+app.post('/api/admin/payments/:id/verify-iyzico', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  if (!isIyzicoReady()) return res.status(400).json({ error: 'iyzico kapalı' });
+  const [rows] = await pool.query(`SELECT id, iyzico_token, status FROM job_payments WHERE id = :id LIMIT 1`, {
+    id: req.params.id,
+  });
+  const p = rows[0];
+  if (!p) return res.status(404).json({ error: 'Sipariş yok' });
+  if (!p.iyzico_token) return res.status(400).json({ error: 'Bu siparişte iyzico oturumu yok' });
+  try {
+    const { outcome } = await settleIyzicoPayment(p.iyzico_token, p.id);
+    const messages = {
+      paid: 'Ödeme iyzico’da başarılı — hak tanımlandı.',
+      already_paid: 'Sipariş zaten ödenmiş.',
+      failed: 'iyzico’da başarılı tahsilat yok — sipariş başarısız olarak kapatıldı.',
+      amount_mismatch: 'Tutar uyuşmazlığı — hak tanımlanmadı.',
+      not_found: 'Sipariş eşleşmedi.',
+      token_mismatch: 'Token uyuşmazlığı.',
+    };
+    res.json({ ok: outcome === 'paid' || outcome === 'already_paid', outcome, message: messages[outcome] });
+  } catch (e) {
+    logError('admin verify iyzico', { error: e.message, id: p.id });
+    res.status(502).json({ error: `iyzico sorgusu başarısız: ${e.message}` });
   }
 });
 
@@ -1949,7 +2033,7 @@ app.get('/api/payments/:id', auth, async (req, res) => {
   if (p.employer_id !== req.user.id && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Yetki yok' });
   }
-  const { credits_meta, ...rest } = p;
+  const { credits_meta, iyzico_token, ...rest } = p;
   res.json(rest);
 });
 
@@ -1967,7 +2051,12 @@ app.get('/api/payments', auth, async (req, res) => {
       : `SELECT * FROM job_payments WHERE employer_id = :id ORDER BY created_at DESC`,
     { id: req.user.id },
   );
-  res.json(rows);
+  res.json(
+    rows.map(({ iyzico_token, credits_meta, ...rest }) => ({
+      ...rest,
+      has_iyzico: Boolean(iyzico_token),
+    })),
+  );
 });
 
 // ---- Notifications / contact ----

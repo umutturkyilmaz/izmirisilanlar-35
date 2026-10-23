@@ -13,6 +13,7 @@ interface PaymentRow {
   buyer_email: string | null;
   company_name: string | null;
   created_at: string;
+  has_iyzico?: boolean;
 }
 
 const statusLabel: Record<string, string> = {
@@ -56,6 +57,21 @@ export default function PaymentsSection() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Onay başarısız');
+    }
+    setBusyId(null);
+  };
+
+  const verifyIyzico = async (id: string) => {
+    setBusyId(id);
+    try {
+      const r = await api<{ ok: boolean; message?: string }>(
+        `/api/admin/payments/${id}/verify-iyzico`,
+        { method: 'POST', body: {} },
+      );
+      setError(r.message || null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Doğrulama başarısız');
     }
     setBusyId(null);
   };
@@ -112,6 +128,8 @@ export default function PaymentsSection() {
           <tbody>
             {rows.map((r) => {
               const canReview = r.status === 'pending_admin' || r.status === 'pending_iyzico';
+              const canVerify =
+                Boolean(r.has_iyzico) && ['pending_iyzico', 'failed'].includes(r.status);
               return (
                 <tr key={r.id} className="border-t border-background-200">
                   <td className="px-3 py-2 whitespace-nowrap">
@@ -137,16 +155,28 @@ export default function PaymentsSection() {
                     </span>
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
+                    {canVerify && (
+                      <button
+                        type="button"
+                        disabled={busyId === r.id}
+                        className="text-xs text-blue-700 font-semibold hover:underline mr-2 disabled:opacity-50"
+                        onClick={() => void verifyIyzico(r.id)}
+                      >
+                        iyzico’dan doğrula
+                      </button>
+                    )}
                     {canReview && (
                       <>
-                        <button
-                          type="button"
-                          disabled={busyId === r.id}
-                          className="text-xs text-green-700 font-semibold hover:underline mr-2 disabled:opacity-50"
-                          onClick={() => void approve(r.id)}
-                        >
-                          Onayla
-                        </button>
+                        {!r.has_iyzico && (
+                          <button
+                            type="button"
+                            disabled={busyId === r.id}
+                            className="text-xs text-green-700 font-semibold hover:underline mr-2 disabled:opacity-50"
+                            onClick={() => void approve(r.id)}
+                          >
+                            Onayla
+                          </button>
+                        )}
                         <button
                           type="button"
                           disabled={busyId === r.id}
