@@ -4,8 +4,79 @@ import nodemailer from 'nodemailer';
 const siteUrl = () =>
   (process.env.PUBLIC_SITE_URL || 'https://izmirisilanlari35.com').replace(/\/$/, '');
 
+/**
+ * Railway Hobby planında giden SMTP kapalı → HTTPS tabanlı sağlayıcılar:
+ *  - resend: RESEND_API_KEY + MAIL_FROM (doğrulanmış alan adı)
+ *  - gas:    GAS_MAIL_URL + GAS_MAIL_SECRET (Google Apps Script köprüsü, Gmail'den gönderir)
+ *  - smtp:   SMTP_HOST/USER/PASS (yalnızca Railway Pro)
+ */
+function mailProvider() {
+  const forced = String(process.env.MAIL_PROVIDER || '').trim().toLowerCase();
+  if (forced) return forced;
+  if (process.env.RESEND_API_KEY) return 'resend';
+  if (process.env.GAS_MAIL_URL) return 'gas';
+  return 'smtp';
+}
+
 export function isMailReady() {
+  const p = mailProvider();
+  if (p === 'resend') return Boolean(process.env.RESEND_API_KEY && process.env.MAIL_FROM);
+  if (p === 'gas') return Boolean(process.env.GAS_MAIL_URL && process.env.GAS_MAIL_SECRET);
   return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
+function toBase64(content) {
+  return Buffer.isBuffer(content) ? content.toString('base64') : Buffer.from(String(content)).toString('base64');
+}
+
+async function sendViaResend({ to, subject, text, html, attachments }) {
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.MAIL_FROM,
+      to: [to],
+      reply_to: process.env.MAIL_REPLY_TO || undefined,
+      subject,
+      text,
+      html: html || undefined,
+      attachments: attachments?.map((a) => ({ filename: a.filename, content: toBase64(a.content) })),
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    throw new Error(`Resend ${r.status}: ${data.message || data.error || 'gönderim başarısız'}`);
+  }
+}
+
+async function sendViaAppsScript({ to, subject, text, html, attachments }) {
+  const r = await fetch(process.env.GAS_MAIL_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      secret: process.env.GAS_MAIL_SECRET,
+      to,
+      subject,
+      text,
+      html: html || '',
+      replyTo: process.env.MAIL_REPLY_TO || '',
+      attachments: attachments?.map((a) => ({
+        filename: a.filename,
+        contentType: a.contentType || 'application/octet-stream',
+        content: toBase64(a.content),
+      })),
+    }),
+    redirect: 'follow',
+    signal: AbortSignal.timeout(90000),
+  });
+  const data = await r.json().catch(() => null);
+  if (!r.ok || !data?.ok) {
+    throw new Error(`Apps Script: ${data?.error || `HTTP ${r.status} (dağıtım URL'si/yetki kontrol edin)`}`);
+  }
 }
 
 let transporter = null;
@@ -40,11 +111,27 @@ async function getTransporter() {
 }
 
 export async function sendMail({ to, subject, text, html, attachments }) {
-  const tx = await getTransporter();
-  if (!tx) {
-    console.warn('[mail] SMTP yok — atlandı:', subject, '→', to);
+  if (!isMailReady()) {
+    console.warn('[mail] e-posta yapılandırılmamış — atlandı:', subject, '→', to);
     return { ok: false, skipped: true };
   }
+  const provider = mailProvider();
+  if (provider === 'resend' || provider === 'gas') {
+    try {
+      await (provider === 'resend' ? sendViaResend : sendViaAppsScript)({
+        to,
+        subject,
+        text,
+        html,
+        attachments,
+      });
+    } catch (e) {
+      console.error('[mail] gönderilemedi:', subject, '→', to, e.message);
+      throw e;
+    }
+    return { ok: true };
+  }
+  const tx = await getTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
   try {
     await tx.sendMail({ from, to, subject, text, html: html || text, attachments });
@@ -57,8 +144,10 @@ export async function sendMail({ to, subject, text, html, attachments }) {
   return { ok: true };
 }
 
-/** Admin teşhisi: SMTP bağlantısı + kimlik doğrulama */
+/** Admin teşhisi: SMTP bağlantısı + kimlik doğrulama (HTTPS sağlayıcılarda test e-postası yeterli) */
 export async function verifySmtp() {
+  if (!isMailReady()) throw new Error('E-posta yapılandırılmamış (RESEND_API_KEY / GAS_MAIL_URL / SMTP)');
+  if (mailProvider() !== 'smtp') return true;
   const tx = await getTransporter();
   if (!tx) throw new Error('SMTP yapılandırılmamış');
   try {
