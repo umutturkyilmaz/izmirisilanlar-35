@@ -141,6 +141,26 @@ const server = http.createServer((req, res) => {
 
   const urlPath = req.url || '/';
   const pathname = urlPath.split('?')[0];
+
+  // İlan sitemap'i API'de üretilir; Search Console aynı alan adını istediği için buradan sunulur
+  if (pathname === '/sitemap-jobs.xml') {
+    fetch(`${API_BASE}/sitemap-jobs.xml`, { signal: AbortSignal.timeout(5000) })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const xml = await r.text();
+        send(res, 200, req.method === 'HEAD' ? '' : xml, {
+          'Content-Type': 'application/xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=3600',
+        });
+      })
+      .catch(() =>
+        send(res, 502, 'Sitemap geçici olarak alınamadı', {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-store',
+        }),
+      );
+    return;
+  }
   const isAssetPath = pathname.includes('/assets/') || STATIC_EXT.test(pathname);
 
   let resolved = existingFile(safePath(pathname === '/' ? '/index.html' : pathname));
