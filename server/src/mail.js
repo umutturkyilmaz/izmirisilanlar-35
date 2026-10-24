@@ -1,3 +1,4 @@
+import dns from 'node:dns/promises';
 import nodemailer from 'nodemailer';
 
 const siteUrl = () =>
@@ -9,31 +10,64 @@ export function isMailReady() {
 
 let transporter = null;
 
-function getTransporter() {
+/** Railway konteynerlerinde IPv6 çıkışı yok (ENETUNREACH); SMTP sunucusuna IPv4 ile bağlan */
+async function getTransporter() {
   if (!isMailReady()) return null;
   if (!transporter) {
+    const host = process.env.SMTP_HOST;
+    let connectHost = host;
+    try {
+      const [ipv4] = await dns.resolve4(host);
+      if (ipv4) connectHost = ipv4;
+    } catch {
+      /* IP yerine host adıyla dene */
+    }
     transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
+      host: connectHost,
       port: Number(process.env.SMTP_PORT || 587),
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+      tls: { servername: host },
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
+      socketTimeout: 60000,
     });
   }
   return transporter;
 }
 
 export async function sendMail({ to, subject, text, html, attachments }) {
-  const tx = getTransporter();
+  const tx = await getTransporter();
   if (!tx) {
     console.warn('[mail] SMTP yok — atlandı:', subject, '→', to);
     return { ok: false, skipped: true };
   }
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-  await tx.sendMail({ from, to, subject, text, html: html || text, attachments });
+  try {
+    await tx.sendMail({ from, to, subject, text, html: html || text, attachments });
+  } catch (e) {
+    // IP değişmiş olabilir; sonraki gönderimde yeniden çöz
+    transporter = null;
+    console.error('[mail] gönderilemedi:', subject, '→', to, e.message);
+    throw e;
+  }
   return { ok: true };
+}
+
+/** Admin teşhisi: SMTP bağlantısı + kimlik doğrulama */
+export async function verifySmtp() {
+  const tx = await getTransporter();
+  if (!tx) throw new Error('SMTP yapılandırılmamış');
+  try {
+    await tx.verify();
+  } catch (e) {
+    transporter = null;
+    throw e;
+  }
+  return true;
 }
 
 export async function sendBackupEmail({ filename, buffer, counts, includeBlobs }) {

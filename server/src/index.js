@@ -34,6 +34,8 @@ import {
   sendPaymentReceiptEmail,
   sendPaymentAdminNotifyEmail,
   sendBackupEmail,
+  sendMail,
+  verifySmtp,
 } from './mail.js';
 import { createBackup, EMAIL_ATTACHMENT_LIMIT } from './backup.js';
 import { OAuth2Client } from 'google-auth-library';
@@ -44,6 +46,11 @@ function logInfo(msg, extra = {}) {
 function logError(msg, extra = {}) {
   console.error(JSON.stringify({ level: 'error', msg, t: new Date().toISOString(), ...extra }));
 }
+
+// Arka planda (void) gönderilen e-posta vb. hataları süreci düşürmesin
+process.on('unhandledRejection', (reason) => {
+  logError('unhandledRejection', { error: reason instanceof Error ? reason.message : String(reason) });
+});
 
 function buildCorsOrigins() {
   const raw =
@@ -2820,6 +2827,23 @@ app.get('/api/admin/backup', auth, async (req, res) => {
   } catch (e) {
     logError('backup download', { error: e.message });
     res.status(500).json({ error: `Yedek alınamadı: ${e.message}` });
+  }
+});
+
+/** Admin: SMTP bağlantısını doğrula ve admin'e test e-postası gönder */
+app.post('/api/admin/mail-test', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  try {
+    await verifySmtp();
+    await sendMail({
+      to: req.user.email,
+      subject: 'Test e-postası — İzmir İş İlanları 35',
+      text: 'SMTP bağlantısı çalışıyor. Bu e-postayı aldıysanız sistem e-postaları gönderilebilir.',
+    });
+    res.json({ ok: true, message: `Test e-postası ${req.user.email} adresine gönderildi.` });
+  } catch (e) {
+    logError('mail test', { error: e.message });
+    res.status(502).json({ error: `E-posta gönderilemedi: ${e.message}` });
   }
 });
 

@@ -4,7 +4,7 @@ import { api, getToken } from '@/lib/api';
 const API_URL = (import.meta.env.VITE_PUBLIC_API_URL || '').replace(/\/$/, '');
 
 export default function BackupPanel() {
-  const [busy, setBusy] = useState<'download' | 'email' | null>(null);
+  const [busy, setBusy] = useState<'download' | 'email' | 'test' | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const download = async () => {
@@ -45,6 +45,18 @@ export default function BackupPanel() {
     setBusy(null);
   };
 
+  const testMail = async () => {
+    setBusy('test');
+    setMsg(null);
+    try {
+      const r = await api<{ message?: string }>('/api/admin/mail-test', { method: 'POST', body: {} });
+      setMsg({ ok: true, text: r.message || 'Test e-postası gönderildi.' });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : 'Test başarısız' });
+    }
+    setBusy(null);
+  };
+
   return (
     <div className="mb-6 rounded-xl border border-background-200 bg-background-50 dark:bg-background-100 p-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -70,6 +82,14 @@ export default function BackupPanel() {
             className="px-3 py-2 rounded-lg border border-background-300 text-xs font-semibold disabled:opacity-50"
           >
             {busy === 'email' ? 'Gönderiliyor…' : 'Şimdi e-postala'}
+          </button>
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => void testMail()}
+            className="px-3 py-2 rounded-lg border border-background-300 text-xs font-semibold disabled:opacity-50"
+          >
+            {busy === 'test' ? 'Test ediliyor…' : 'E-posta testi'}
           </button>
         </div>
       </div>
