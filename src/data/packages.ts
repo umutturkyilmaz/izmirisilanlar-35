@@ -68,9 +68,20 @@ export function getPackageById(id: string): JobPackage | undefined {
 }
 
 export function formatPrice(amount: number, currency: string = 'TRY'): string {
+  const whole = Number.isInteger(Math.round(amount * 100) / 100);
   return new Intl.NumberFormat('tr-TR', {
     style: 'currency',
     currency,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: 2,
   }).format(amount);
+}
+
+/** Paket fiyatları KDV hariçtir — sunucudaki server/src/packages.js ile aynı hesap */
+export const KDV_RATE = 20;
+
+export function priceBreakdown(netPrice: number) {
+  const netKurus = Math.round(netPrice * 100);
+  const vatKurus = Math.round((netKurus * KDV_RATE) / 100);
+  return { net: netKurus / 100, vat: vatKurus / 100, gross: (netKurus + vatKurus) / 100, rate: KDV_RATE };
 }

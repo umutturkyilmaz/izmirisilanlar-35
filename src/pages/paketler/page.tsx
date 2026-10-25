@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import DocumentHead from '@/components/feature/DocumentHead';
-import { JOB_PACKAGES, formatPrice } from '@/data/packages';
+import { JOB_PACKAGES, formatPrice, priceBreakdown } from '@/data/packages';
 import PaymentLogos from '@/components/feature/PaymentLogos';
 
 export default function PackagesPage() {
@@ -73,8 +73,11 @@ export default function PackagesPage() {
                   <span className="font-heading text-3xl md:text-4xl font-bold text-foreground-950">
                     {formatPrice(pkg.price)}
                   </span>
-                  <span className="text-sm text-foreground-500 ml-1">KDV dahil</span>
+                  <span className="text-sm text-foreground-500 ml-1">+ KDV</span>
                 </div>
+                <p className="text-xs text-foreground-500">
+                  KDV dahil {formatPrice(priceBreakdown(pkg.price).gross)}
+                </p>
                 <p className="text-xs text-foreground-500 mb-6">Yayın süresi: {pkg.durationDays} gün</p>
 
                 <ul className="flex flex-col gap-2.5 flex-1 mb-7">
@@ -94,7 +97,7 @@ export default function PackagesPage() {
                       : 'bg-foreground-950 hover:bg-foreground-800 text-background-50'
                   }`}
                 >
-                  Satın Al — {formatPrice(pkg.price)}
+                  Satın Al — {formatPrice(pkg.price)} + KDV
                 </Link>
                 <p className="text-[11px] text-center text-foreground-500 mt-2">
                   Anında ödeme sayfasına gider · stok sınırlı değil

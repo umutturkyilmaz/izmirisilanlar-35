@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, getToken } from '@/lib/api';
 import { formatPrice } from '@/data/packages';
 import { downloadInvoicePdf } from '@/lib/invoice';
 
@@ -14,7 +14,19 @@ interface PaymentRow {
   company_name: string | null;
   created_at: string;
   has_iyzico?: boolean;
+  invoice_status?: 'draft' | 'signed' | 'error' | null;
+  invoice_number?: string | null;
+  invoice_error?: string | null;
+  invoice_emailed_at?: string | null;
 }
+
+const API_URL = (import.meta.env.VITE_PUBLIC_API_URL || '').replace(/\/$/, '');
+
+const invoiceLabel: Record<string, [string, string]> = {
+  draft: ['Taslak — imza bekliyor', 'bg-amber-100 text-amber-800'],
+  signed: ['Kesildi', 'bg-green-100 text-green-800'],
+  error: ['Hata', 'bg-red-100 text-red-800'],
+};
 
 const statusLabel: Record<string, string> = {
   pending_admin: 'Admin onayı bekliyor',
@@ -76,6 +88,53 @@ export default function PaymentsSection() {
     }
     setBusyId(null);
   };
+
+  const [invoiceBusy, setInvoiceBusy] = useState<string | null>(null);
+
+  const invoiceAction = async (key: string, path: string, body: object = {}) => {
+    setInvoiceBusy(key);
+    try {
+      const r = await api<{ message?: string }>(path, { method: 'POST', body });
+      setError(r.message || null);
+      await load();
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'İşlem başarısız');
+      return false;
+    } finally {
+      setInvoiceBusy(null);
+    }
+  };
+
+  const signDrafts = async () => {
+    const started = await invoiceAction('sign', '/api/admin/invoices/sms/start');
+    if (!started) return;
+    const code = window.prompt('GİB’den telefonunuza gelen SMS kodunu girin (3 dakika geçerli):')?.trim();
+    if (!code) return;
+    await invoiceAction('sign', '/api/admin/invoices/sms/verify', { code });
+  };
+
+  const viewInvoice = async (id: string) => {
+    setInvoiceBusy(id);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/payments/${id}/invoice.html`, {
+        headers: { Authorization: `Bearer ${getToken() || ''}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error || `HTTP ${res.status}`);
+      }
+      const url = URL.createObjectURL(new Blob([await res.text()], { type: 'text/html' }));
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Fatura açılamadı');
+    } finally {
+      setInvoiceBusy(null);
+    }
+  };
+
+  const draftCount = rows.filter((r) => r.invoice_status === 'draft').length;
 
   const [syncing, setSyncing] = useState(false);
   const syncRefunds = async () => {
@@ -179,7 +238,25 @@ export default function PaymentsSection() {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          disabled={invoiceBusy !== null}
+          onClick={() => void invoiceAction('test', '/api/admin/invoices/test')}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-background-300 hover:bg-background-100 disabled:opacity-50"
+          title="GİB e-Arşiv Portalı girişini dener"
+        >
+          {invoiceBusy === 'test' ? 'Bağlanıyor…' : 'e-Arşiv bağlantı testi'}
+        </button>
+        <button
+          type="button"
+          disabled={invoiceBusy !== null || draftCount === 0}
+          onClick={() => void signDrafts()}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-600 text-white disabled:opacity-50"
+          title="Taslak faturaları tek SMS ile imzalar ve alıcılara e-postalar"
+        >
+          {invoiceBusy === 'sign' ? 'İmzalanıyor…' : `Taslak faturaları imzala (${draftCount})`}
+        </button>
         <button
           type="button"
           disabled={syncing}
@@ -202,6 +279,7 @@ export default function PaymentsSection() {
               <th className="px-3 py-2 font-semibold">Tutar</th>
               <th className="px-3 py-2 font-semibold">Alıcı</th>
               <th className="px-3 py-2 font-semibold">Durum</th>
+              <th className="px-3 py-2 font-semibold">e-Arşiv</th>
               <th className="px-3 py-2 font-semibold">İşlem</th>
             </tr>
           </thead>
@@ -234,6 +312,49 @@ export default function PaymentsSection() {
                     >
                       {statusLabel[r.status] || r.status}
                     </span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {r.invoice_status ? (
+                      <div className="space-y-0.5">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs ${invoiceLabel[r.invoice_status]?.[1] || ''}`}
+                          title={r.invoice_error || undefined}
+                        >
+                          {invoiceLabel[r.invoice_status]?.[0] || r.invoice_status}
+                        </span>
+                        {r.invoice_number && (
+                          <div className="text-[11px] font-mono text-foreground-500">{r.invoice_number}</div>
+                        )}
+                        {r.invoice_status === 'error' && r.invoice_error && (
+                          <div className="text-[11px] text-red-600 max-w-[180px] whitespace-normal">
+                            {r.invoice_error}
+                          </div>
+                        )}
+                      </div>
+                    ) : ['paid', 'admin_approved'].includes(r.status) ? (
+                      <span className="text-xs text-foreground-400">—</span>
+                    ) : null}
+                    {['paid', 'admin_approved'].includes(r.status) &&
+                      (!r.invoice_status || r.invoice_status === 'error') && (
+                        <button
+                          type="button"
+                          disabled={invoiceBusy !== null}
+                          className="block text-xs text-primary-600 font-semibold hover:underline mt-1 disabled:opacity-50"
+                          onClick={() => void invoiceAction(r.id, `/api/admin/payments/${r.id}/invoice`)}
+                        >
+                          {invoiceBusy === r.id ? 'Oluşturuluyor…' : 'Taslak oluştur'}
+                        </button>
+                      )}
+                    {(r.invoice_status === 'draft' || r.invoice_status === 'signed') && (
+                      <button
+                        type="button"
+                        disabled={invoiceBusy !== null}
+                        className="block text-xs text-primary-600 hover:underline mt-1 disabled:opacity-50"
+                        onClick={() => void viewInvoice(r.id)}
+                      >
+                        Görüntüle
+                      </button>
+                    )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {canVerify && (

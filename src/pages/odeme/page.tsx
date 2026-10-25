@@ -4,7 +4,7 @@ import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import DocumentHead from '@/components/feature/DocumentHead';
 import { useAuth } from '@/hooks/useAuth';
-import { getPackageById, formatPrice, JOB_PACKAGES } from '@/data/packages';
+import { getPackageById, formatPrice, JOB_PACKAGES, priceBreakdown, KDV_RATE } from '@/data/packages';
 import { addCreditsFromPackage } from '@/lib/credits';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { createNotification } from '@/lib/notifications';
@@ -23,7 +23,9 @@ export default function CheckoutPage() {
     email: user?.email || '',
     phone: profile?.phone || '',
     companyName: profile?.company_name || '',
-    taxId: '',
+    taxId: profile?.vergi_numarasi || '',
+    taxOffice: '',
+    city: profile?.city || 'İzmir',
     address: '',
     acceptTerms: false,
   });
@@ -56,6 +58,13 @@ export default function CheckoutPage() {
       next.phone = 'Geçerli telefon giriniz';
     }
     if (!form.companyName.trim()) next.companyName = 'Şirket / unvan zorunludur';
+    const taxDigits = form.taxId.replace(/\D/g, '');
+    if (taxDigits && taxDigits.length !== 10 && taxDigits.length !== 11) {
+      next.taxId = 'Vergi no 10, TCKN 11 haneli olmalı';
+    }
+    if (taxDigits.length === 10 && !form.taxOffice.trim()) {
+      next.taxOffice = 'Vergi numarası için vergi dairesi zorunludur';
+    }
     if (!form.address.trim() || form.address.trim().length < 10) {
       next.address = 'Fatura adresi zorunludur';
     }
@@ -79,12 +88,14 @@ export default function CheckoutPage() {
 
     try {
       const result = await addCreditsFromPackage(user.id, selected.id, {
-        amount: selected.price,
+        amount: priceBreakdown(selected.price).gross,
         buyerName: form.fullName.trim(),
         buyerEmail: form.email.trim(),
         buyerPhone: form.phone.trim(),
         companyName: form.companyName.trim(),
         taxId: form.taxId.trim(),
+        taxOffice: form.taxOffice.trim(),
+        city: form.city.trim(),
         billingAddress: form.address.trim(),
       });
 
@@ -204,12 +215,34 @@ export default function CheckoutPage() {
                     />
                     {errors.companyName && <p className="text-xs text-red-600 mt-1">{errors.companyName}</p>}
                   </div>
-                  <div className="sm:col-span-2">
+                  <div>
                     <label className="block text-sm font-medium text-foreground-700 mb-1.5">Vergi No / TCKN</label>
                     <input
                       type="text"
+                      inputMode="numeric"
                       value={form.taxId}
                       onChange={(e) => update('taxId', e.target.value)}
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                    {errors.taxId && <p className="text-xs text-red-600 mt-1">{errors.taxId}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Vergi Dairesi</label>
+                    <input
+                      type="text"
+                      value={form.taxOffice}
+                      onChange={(e) => update('taxOffice', e.target.value)}
+                      placeholder="Ör. Konak"
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                    {errors.taxOffice && <p className="text-xs text-red-600 mt-1">{errors.taxOffice}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">İl</label>
+                    <input
+                      type="text"
+                      value={form.city}
+                      onChange={(e) => update('city', e.target.value)}
                       className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
                     />
                   </div>
@@ -289,8 +322,8 @@ export default function CheckoutPage() {
                   {submitting
                     ? 'İşleniyor...'
                     : iyzicoOn
-                      ? `${formatPrice(selected.price)} — Kart ile Satın Al`
-                      : `${formatPrice(selected.price)} — Siparişi Tamamla`}
+                      ? `${formatPrice(priceBreakdown(selected.price).gross)} — Kart ile Satın Al`
+                      : `${formatPrice(priceBreakdown(selected.price).gross)} — Siparişi Tamamla`}
                 </button>
                 <div className="mt-3 flex justify-center">
                   <PaymentLogos variant="pay" />
@@ -327,11 +360,23 @@ export default function CheckoutPage() {
                       </li>
                     ))}
                   </ul>
-                  <div className="border-t border-background-200 pt-3 flex justify-between items-center">
-                    <span className="font-semibold text-foreground-950">Toplam (KDV dahil)</span>
-                    <span className="font-heading text-xl font-bold text-primary-600">
-                      {formatPrice(selected.price)}
-                    </span>
+                  <div className="border-t border-background-200 pt-3 space-y-1.5">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-foreground-600">Ara toplam (KDV hariç)</span>
+                      <span className="font-medium text-foreground-950">{formatPrice(selected.price)}</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-foreground-600">KDV (%{KDV_RATE})</span>
+                      <span className="font-medium text-foreground-950">
+                        {formatPrice(priceBreakdown(selected.price).vat)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-1">
+                      <span className="font-semibold text-foreground-950">Toplam (KDV dahil)</span>
+                      <span className="font-heading text-xl font-bold text-primary-600">
+                        {formatPrice(priceBreakdown(selected.price).gross)}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -348,7 +393,7 @@ export default function CheckoutPage() {
                             : 'hover:bg-background-200 text-foreground-600'
                         }`}
                       >
-                        {pkg.name} — {formatPrice(pkg.price)}
+                        {pkg.name} — {formatPrice(pkg.price)} + KDV
                       </Link>
                     ))}
                   </div>

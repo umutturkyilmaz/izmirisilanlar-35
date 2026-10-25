@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import Navbar from '@/components/feature/Navbar';
 import Footer from '@/components/feature/Footer';
 import DocumentHead from '@/components/feature/DocumentHead';
-import { getPackageById, formatPrice } from '@/data/packages';
+import { getPackageById, formatPrice, priceBreakdown } from '@/data/packages';
 import { api } from '@/lib/api';
 import { createNotification } from '@/lib/notifications';
 import { useAuth } from '@/hooks/useAuth';
@@ -103,7 +103,7 @@ export default function PaymentSuccessPage() {
               </h1>
               <p className="text-foreground-600 text-sm leading-relaxed mb-3">
                 {pkg?.name} paketi
-                {pkg ? ` (${formatPrice(pkg.price)})` : ''}
+                {pkg ? ` (${formatPrice(priceBreakdown(pkg.price).gross)}, KDV dahil)` : ''}
                 {pending
                   ? ' talebiniz admin paneline iletildi. Onaylanınca ilan hakkınız tanımlanacak.'
                   : granted

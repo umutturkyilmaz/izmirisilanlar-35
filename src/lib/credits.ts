@@ -57,6 +57,8 @@ export async function addCreditsFromPackage(
     buyerPhone: string;
     companyName: string;
     taxId?: string;
+    taxOffice?: string;
+    city?: string;
     billingAddress?: string;
   },
 ) {
@@ -77,6 +79,8 @@ export async function addCreditsFromPackage(
       buyer_phone: meta.buyerPhone,
       company_name: meta.companyName,
       tax_id: meta.taxId,
+      tax_office: meta.taxOffice,
+      city: meta.city,
       billing_address: meta.billingAddress,
     },
   });

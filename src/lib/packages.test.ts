@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatPrice, getPackageById, JOB_PACKAGES } from '@/data/packages';
+import { formatPrice, getPackageById, JOB_PACKAGES, priceBreakdown } from '@/data/packages';
 import { checkRateLimit } from '@/lib/rateLimit';
 
 const store: Record<string, string> = {};
@@ -32,6 +32,13 @@ describe('packages', () => {
 
   it('formats TRY price', () => {
     expect(formatPrice(499)).toContain('499');
+    expect(formatPrice(598.8)).toContain('598,80');
+  });
+
+  it('adds 20% KDV on top of package prices (kuruş exact)', () => {
+    expect(priceBreakdown(499)).toEqual({ net: 499, vat: 99.8, gross: 598.8, rate: 20 });
+    expect(priceBreakdown(899).gross).toBe(1078.8);
+    expect(priceBreakdown(2499).gross).toBe(2998.8);
   });
 
   it('does not promise unimplemented email digest features', () => {

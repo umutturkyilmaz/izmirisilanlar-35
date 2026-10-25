@@ -18,7 +18,7 @@ import {
   refundPayment,
   retrievePaymentDetails,
 } from './iyzico.js';
-import { getServerPackage, packageCreditsMeta } from './packages.js';
+import { getServerPackage, packageCreditsMeta, priceBreakdown } from './packages.js';
 import { assertUploadContent, publicError } from './security.js';
 import { isValidVkn, normalizeVkn } from './vkn.js';
 import { assessEmployer } from './employerRisk.js';
@@ -36,7 +36,9 @@ import {
   sendBackupEmail,
   sendMail,
   verifySmtp,
+  sendInvoiceEmail,
 } from './mail.js';
+import * as earsiv from './earsiv.js';
 import { createBackup, EMAIL_ATTACHMENT_LIMIT } from './backup.js';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -162,6 +164,16 @@ async function ensureSchema() {
     `ALTER TABLE users ADD COLUMN risk_level VARCHAR(8) NULL`,
     `ALTER TABLE users ADD COLUMN risk_checks JSON NULL`,
     `ALTER TABLE users ADD COLUMN dogrulama_yontemi VARCHAR(16) NULL`,
+    `ALTER TABLE job_payments ADD COLUMN tax_office VARCHAR(128) NULL`,
+    `ALTER TABLE job_payments ADD COLUMN buyer_city VARCHAR(64) NULL`,
+    `ALTER TABLE job_payments ADD COLUMN net_amount DECIMAL(12,2) NULL`,
+    `ALTER TABLE job_payments ADD COLUMN vat_amount DECIMAL(12,2) NULL`,
+    `ALTER TABLE job_payments ADD COLUMN invoice_uuid CHAR(36) NULL`,
+    `ALTER TABLE job_payments ADD COLUMN invoice_number VARCHAR(32) NULL`,
+    `ALTER TABLE job_payments ADD COLUMN invoice_status VARCHAR(16) NULL`,
+    `ALTER TABLE job_payments ADD COLUMN invoice_error TEXT NULL`,
+    `ALTER TABLE job_payments ADD COLUMN invoice_signed_at DATETIME NULL`,
+    `ALTER TABLE job_payments ADD COLUMN invoice_emailed_at DATETIME NULL`,
   ]) {
     try {
       await pool.query(sql);
@@ -604,9 +616,10 @@ app.get('/api/health', async (_req, res) => {
       mail: isMailReady(),
       google: GOOGLE_AUTH_ENABLED && Boolean(GOOGLE_CLIENT_ID),
       iyzico: isIyzicoReady(),
+      earsiv: earsiv.isEarsivReady() ? earsiv.earsivMode() : false,
     });
   } catch (e) {
-    res.status(503).json({ ok: false, db: false, error: 'Veritaban� kullan�lam�yor' });
+    res.status(503).json({ ok: false, db: false, error: 'Veritabanı kullanılamıyor' });
   }
 });
 
@@ -1775,20 +1788,24 @@ app.post('/api/payments/checkout', auth, async (req, res) => {
     if (!isIyzicoReady()) {
       await pool.query(
         `INSERT INTO job_payments
-        (id, employer_id, package_id, package_name, amount, currency, status, buyer_name, buyer_email, buyer_phone, company_name, tax_id, billing_address, credits_meta)
+        (id, employer_id, package_id, package_name, amount, net_amount, vat_amount, currency, status, buyer_name, buyer_email, buyer_phone, company_name, tax_id, tax_office, buyer_city, billing_address, credits_meta)
         VALUES
-        (:id, :employer_id, :package_id, :package_name, :amount, 'TRY', 'pending_admin', :buyer_name, :buyer_email, :buyer_phone, :company_name, :tax_id, :billing_address, :credits_meta)`,
+        (:id, :employer_id, :package_id, :package_name, :amount, :net_amount, :vat_amount, 'TRY', 'pending_admin', :buyer_name, :buyer_email, :buyer_phone, :company_name, :tax_id, :tax_office, :buyer_city, :billing_address, :credits_meta)`,
         {
           id: paymentId,
           employer_id: req.user.id,
           package_id: pkg.id,
           package_name: pkg.name,
-          amount: pkg.price,
+          amount: priceBreakdown(pkg.price).gross,
+          net_amount: priceBreakdown(pkg.price).net,
+          vat_amount: priceBreakdown(pkg.price).vat,
           buyer_name: b.buyer_name || null,
           buyer_email: b.buyer_email || null,
           buyer_phone: b.buyer_phone || null,
           company_name: b.company_name || null,
           tax_id: b.tax_id || null,
+          tax_office: String(b.tax_office || '').trim().slice(0, 128) || null,
+          buyer_city: String(b.city || '').trim().slice(0, 64) || null,
           billing_address: b.billing_address || null,
           credits_meta: JSON.stringify(meta),
         },
@@ -1808,20 +1825,24 @@ app.post('/api/payments/checkout', auth, async (req, res) => {
 
     await pool.query(
       `INSERT INTO job_payments
-      (id, employer_id, package_id, package_name, amount, currency, status, buyer_name, buyer_email, buyer_phone, company_name, tax_id, billing_address, credits_meta)
+      (id, employer_id, package_id, package_name, amount, net_amount, vat_amount, currency, status, buyer_name, buyer_email, buyer_phone, company_name, tax_id, tax_office, buyer_city, billing_address, credits_meta)
       VALUES
-      (:id, :employer_id, :package_id, :package_name, :amount, 'TRY', 'pending_iyzico', :buyer_name, :buyer_email, :buyer_phone, :company_name, :tax_id, :billing_address, :credits_meta)`,
+      (:id, :employer_id, :package_id, :package_name, :amount, :net_amount, :vat_amount, 'TRY', 'pending_iyzico', :buyer_name, :buyer_email, :buyer_phone, :company_name, :tax_id, :tax_office, :buyer_city, :billing_address, :credits_meta)`,
       {
         id: paymentId,
         employer_id: req.user.id,
         package_id: pkg.id,
         package_name: pkg.name,
-        amount: pkg.price,
+        amount: priceBreakdown(pkg.price).gross,
+        net_amount: priceBreakdown(pkg.price).net,
+        vat_amount: priceBreakdown(pkg.price).vat,
         buyer_name: b.buyer_name || null,
         buyer_email: b.buyer_email || null,
         buyer_phone: b.buyer_phone || null,
         company_name: b.company_name || null,
         tax_id: b.tax_id || null,
+        tax_office: String(b.tax_office || '').trim().slice(0, 128) || null,
+        buyer_city: String(b.city || '').trim().slice(0, 64) || null,
         billing_address: b.billing_address || null,
         credits_meta: JSON.stringify(meta),
       },
@@ -1842,7 +1863,7 @@ app.post('/api/payments/checkout', auth, async (req, res) => {
       init = await initializeCheckoutForm({
       conversationId: paymentId,
       basketId: paymentId,
-      price: pkg.price,
+      price: priceBreakdown(pkg.price).gross,
       packageId: pkg.id,
       packageName: pkg.name,
       callbackUrl: `${publicApi}/api/payments/iyzico/callback`,
@@ -2023,7 +2044,8 @@ async function settleIyzicoPayment(token, expectedPaymentId = null) {
     // status === 'success' yalnızca sorgunun başarılı olduğunu söyler; tahsilat paymentStatus ile kesinleşir
     if (result.status === 'success' && result.paymentStatus === 'SUCCESS') {
       const catalog = getServerPackage(payment.package_id);
-      const expected = Number(catalog?.price ?? payment.amount);
+      // Sipariş anında sunucunun belirlediği KDV dahil tutar (fiyat değişse de eski sipariş tutarlı kalır)
+      const expected = Number(payment.amount) || (catalog ? priceBreakdown(catalog.price).gross : 0);
       const basketPrice = Number(result.price);
       const paid = Number(result.paidPrice);
       // Taksit farkı alıcıya yansıtılırsa paidPrice sepet tutarından yüksek olabilir
@@ -2102,9 +2124,263 @@ async function settleIyzicoPayment(token, expectedPaymentId = null) {
       buyer: [payment.buyer_name || payment.company_name, buyerEmail].filter(Boolean).join(' · '),
       orderRef,
     }).catch((e) => logError('payment admin mail', { error: e.message }));
+    void createInvoiceDraftForPayment(payment.id);
   }
   return { outcome, payment };
 }
+
+// ---- e-Arşiv fatura ----
+
+/** Eski siparişlerde (KDV dökümü yok) tutar KDV dahil kabul edilir */
+function paymentVatBreakdown(p) {
+  if (p.net_amount != null && p.vat_amount != null) {
+    const net = Number(p.net_amount);
+    const vat = Number(p.vat_amount);
+    return { net, vat, gross: Math.round((net + vat) * 100) / 100 };
+  }
+  const grossKurus = Math.round(Number(p.amount) * 100);
+  const netKurus = Math.round(grossKurus / 1.2);
+  return { net: netKurus / 100, vat: (grossKurus - netKurus) / 100, gross: grossKurus / 100 };
+}
+
+async function buildInvoiceForPayment(p, token) {
+  const { date, time } = earsiv.trNow(p.created_at ? new Date(p.created_at) : new Date());
+  const today = earsiv.trNow();
+  const amounts = paymentVatBreakdown(p);
+  const catalog = getServerPackage(p.package_id);
+  const digits = String(p.tax_id || '').replace(/\D/g, '');
+  const nameParts = String(p.buyer_name || 'Müşteri').trim().split(/\s+/);
+  const buyer = {
+    taxId: '11111111111',
+    title: '',
+    name: nameParts.slice(0, -1).join(' ') || nameParts[0],
+    surname: nameParts.length > 1 ? nameParts[nameParts.length - 1] : '-',
+    taxOffice: p.tax_office || '',
+    address: p.billing_address || '',
+    city: p.buyer_city || 'İzmir',
+    email: p.buyer_email || '',
+    phone: p.buyer_phone || '',
+  };
+  if (digits.length === 10) {
+    buyer.taxId = digits;
+    buyer.title = p.company_name || p.buyer_name || '';
+    buyer.name = '';
+    buyer.surname = '';
+    if (!buyer.taxOffice) {
+      const sicil = await earsiv.getRecipientData(token, digits);
+      if (sicil?.vergiDairesi) buyer.taxOffice = sicil.vergiDairesi;
+      if (!buyer.title && sicil?.unvan) buyer.title = sicil.unvan;
+    }
+  } else if (digits.length === 11) {
+    buyer.taxId = digits;
+  }
+  const orderRef = String(p.id).slice(0, 12).toUpperCase();
+  return {
+    uuid: p.invoice_uuid || crypto.randomUUID(),
+    date: today.date,
+    time: today.time,
+    orderNumber: orderRef,
+    buyer,
+    itemName: `${p.package_name} — iş ilanı yayınlama hizmeti${
+      catalog ? ` (${catalog.credits_count} ilan, ${catalog.duration_days} gün)` : ''
+    }`,
+    net: amounts.net,
+    vat: amounts.vat,
+    vatRate: 20,
+    gross: amounts.gross,
+    note: [
+      'Bu satış internet üzerinden yapılmıştır.',
+      'Web adresi: izmirisilanlari35.com',
+      'Ödeme şekli: Kredi/banka kartı (iyzico)',
+      `Ödeme tarihi: ${date} ${time}`,
+      `Sipariş no: ${orderRef}`,
+      'Hizmet elektronik ortamda ifa edilmiştir.',
+    ].join(' · '),
+  };
+}
+
+/** Ödenmiş sipariş için e-Arşiv TASLAK fatura (imza SMS ile adminden) */
+async function createInvoiceDraftForPayment(paymentId) {
+  if (!earsiv.isEarsivReady()) return { skipped: true };
+  const [rows] = await pool.query('SELECT * FROM job_payments WHERE id = ? LIMIT 1', [paymentId]);
+  const p = rows[0];
+  if (!p) return { error: 'Sipariş yok' };
+  if (!['paid', 'admin_approved'].includes(p.status)) return { error: 'Sipariş ödenmemiş' };
+  if (['draft', 'signed'].includes(p.invoice_status)) return { skipped: true, status: p.invoice_status };
+  let token;
+  try {
+    token = await earsiv.login();
+    const inv = await buildInvoiceForPayment(p, token);
+    await earsiv.createDraft(token, inv);
+    let number = null;
+    try {
+      const docs = await earsiv.listDocuments(token, inv.date, inv.date);
+      number = docs.find((d) => d.ettn === inv.uuid)?.belgeNumarasi || null;
+    } catch {
+      /* numara sonradan da alınabilir */
+    }
+    await pool.query(
+      `UPDATE job_payments SET invoice_uuid = ?, invoice_number = ?, invoice_status = 'draft', invoice_error = NULL WHERE id = ?`,
+      [inv.uuid, number, p.id],
+    );
+    logInfo('earsiv draft created', { paymentId: p.id, number });
+    return { ok: true, uuid: inv.uuid, number };
+  } catch (e) {
+    await pool.query(`UPDATE job_payments SET invoice_status = 'error', invoice_error = ? WHERE id = ?`, [
+      String(e.message).slice(0, 500),
+      p.id,
+    ]);
+    logError('earsiv draft', { paymentId: p.id, error: e.message });
+    return { error: e.message };
+  } finally {
+    if (token) await earsiv.logout(token);
+  }
+}
+
+/** SMS imza oturumu (tek admin, tek sunucu) — GİB OID'i 3 dakika geçerli */
+let invoiceSignSession = null;
+
+app.post('/api/admin/invoices/test', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  if (!earsiv.isEarsivReady()) {
+    return res.status(400).json({ error: 'e-Arşiv kapalı (EARSIV_ENABLED / EARSIV_USER / EARSIV_PASS)' });
+  }
+  let token;
+  try {
+    token = await earsiv.login();
+    const u = await earsiv.getUserData(token);
+    res.json({
+      ok: true,
+      message: `e-Arşiv bağlantısı başarılı (${earsiv.earsivMode()}): ${u?.unvan || [u?.ad, u?.soyad].filter(Boolean).join(' ') || 'kullanıcı'} · VKN/TCKN ${u?.vknTckn || '—'}`,
+    });
+  } catch (e) {
+    res.status(502).json({ error: `e-Arşiv bağlantısı başarısız: ${e.message}` });
+  } finally {
+    if (token) await earsiv.logout(token);
+  }
+});
+
+app.post('/api/admin/payments/:id/invoice', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  if (!earsiv.isEarsivReady()) return res.status(400).json({ error: 'e-Arşiv kapalı' });
+  await pool.query(
+    `UPDATE job_payments SET invoice_status = NULL WHERE id = ? AND invoice_status = 'error'`,
+    [req.params.id],
+  );
+  const r = await createInvoiceDraftForPayment(req.params.id);
+  if (r.error) return res.status(502).json({ error: `Taslak oluşturulamadı: ${r.error}` });
+  res.json({
+    ok: true,
+    message: r.skipped ? `Fatura zaten ${r.status === 'signed' ? 'imzalı' : 'taslakta'}.` : 'Taslak fatura oluşturuldu.',
+  });
+});
+
+app.post('/api/admin/invoices/sms/start', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  if (!earsiv.isEarsivReady()) return res.status(400).json({ error: 'e-Arşiv kapalı' });
+  const [rows] = await pool.query(
+    `SELECT id, invoice_uuid FROM job_payments WHERE invoice_status = 'draft' AND invoice_uuid IS NOT NULL ORDER BY created_at ASC LIMIT 50`,
+  );
+  if (!rows.length) return res.status(400).json({ error: 'İmzalanacak taslak fatura yok' });
+  if (invoiceSignSession?.token) await earsiv.logout(invoiceSignSession.token);
+  let token;
+  try {
+    token = await earsiv.login();
+    const { oid, phone } = await earsiv.startSmsVerification(token);
+    invoiceSignSession = {
+      token,
+      oid,
+      ids: rows.map((r) => r.id),
+      uuids: rows.map((r) => r.invoice_uuid),
+      expiresAt: Date.now() + 170 * 1000,
+    };
+    res.json({
+      ok: true,
+      count: rows.length,
+      message: `${rows.length} taslak için SMS kodu ${String(phone).replace(/\d(?=\d{2})/g, '*')} numarasına gönderildi (3 dk geçerli).`,
+    });
+  } catch (e) {
+    if (token) await earsiv.logout(token);
+    res.status(502).json({ error: `SMS gönderilemedi: ${e.message}` });
+  }
+});
+
+app.post('/api/admin/invoices/sms/verify', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const code = String(req.body?.code || '').trim();
+  const s = invoiceSignSession;
+  if (!s || Date.now() > s.expiresAt) {
+    return res.status(400).json({ error: 'SMS oturumu yok veya süresi doldu; yeniden kod isteyin' });
+  }
+  if (!/^\d{4,8}$/.test(code)) return res.status(400).json({ error: 'Geçersiz SMS kodu' });
+  try {
+    await earsiv.completeSmsVerification(s.token, code, s.oid, s.uuids);
+  } catch (e) {
+    return res.status(400).json({ error: `İmza başarısız: ${e.message}` });
+  }
+  invoiceSignSession = null;
+  await pool.query(
+    `UPDATE job_payments SET invoice_status = 'signed', invoice_signed_at = NOW(), invoice_error = NULL WHERE id IN (?)`,
+    [s.ids],
+  );
+
+  // İmzalı faturaları alıcılara gönder (aynı oturumla HTML al)
+  let emailed = 0;
+  const [paid] = await pool.query(`SELECT * FROM job_payments WHERE id IN (?)`, [s.ids]);
+  for (const p of paid) {
+    try {
+      let number = p.invoice_number;
+      if (!number) {
+        const today = earsiv.trNow().date;
+        const docs = await earsiv.listDocuments(s.token, today, today).catch(() => []);
+        number = docs.find((d) => d.ettn === p.invoice_uuid)?.belgeNumarasi || null;
+      }
+      const html = await earsiv.getHtml(s.token, p.invoice_uuid, true);
+      let email = p.buyer_email;
+      if (!email) {
+        const [[u]] = await pool.query('SELECT email FROM users WHERE id = ? LIMIT 1', [p.employer_id]);
+        email = u?.email;
+      }
+      await sendInvoiceEmail(email, {
+        packageName: p.package_name,
+        invoiceNumber: number,
+        gross: paymentVatBreakdown(p).gross.toFixed(2),
+        html,
+      });
+      await pool.query(
+        'UPDATE job_payments SET invoice_number = COALESCE(invoice_number, ?), invoice_emailed_at = NOW() WHERE id = ?',
+        [number, p.id],
+      );
+      emailed++;
+    } catch (e) {
+      logError('invoice email', { paymentId: p.id, error: e.message });
+    }
+  }
+  await earsiv.logout(s.token);
+  res.json({
+    ok: true,
+    message: `${s.ids.length} fatura imzalandı · ${emailed} alıcıya e-postayla gönderildi.`,
+  });
+});
+
+app.get('/api/admin/payments/:id/invoice.html', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const [rows] = await pool.query('SELECT invoice_uuid, invoice_status FROM job_payments WHERE id = ? LIMIT 1', [
+    req.params.id,
+  ]);
+  const p = rows[0];
+  if (!p?.invoice_uuid) return res.status(404).json({ error: 'Fatura yok' });
+  let token;
+  try {
+    token = await earsiv.login();
+    const html = await earsiv.getHtml(token, p.invoice_uuid, p.invoice_status === 'signed');
+    res.type('text/html').send(html);
+  } catch (e) {
+    res.status(502).json({ error: `Fatura alınamadı: ${e.message}` });
+  } finally {
+    if (token) await earsiv.logout(token);
+  }
+});
 
 /** iyzico Checkout Form callback (POST token) */
 app.post('/api/payments/iyzico/callback', express.urlencoded({ extended: true }), async (req, res) => {

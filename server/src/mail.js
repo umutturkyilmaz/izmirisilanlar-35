@@ -159,6 +159,24 @@ export async function verifySmtp() {
   return true;
 }
 
+export async function sendInvoiceEmail(email, { packageName, invoiceNumber, gross, html }) {
+  if (!email) return { ok: false, skipped: true };
+  return sendMail({
+    to: email,
+    subject: `e-Arşiv faturanız — ${invoiceNumber || packageName}`,
+    text: `Merhaba,\n\n${packageName} paketi için ${gross} TL tutarındaki e-Arşiv faturanız ektedir${
+      invoiceNumber ? ` (Fatura No: ${invoiceNumber})` : ''
+    }.\nEki tarayıcınızda açıp yazdırabilir veya PDF olarak kaydedebilirsiniz.\n\n— İzmir İş İlanları 35`,
+    attachments: [
+      {
+        filename: `fatura-${invoiceNumber || 'e-arsiv'}.html`,
+        content: Buffer.from(String(html || ''), 'utf8'),
+        contentType: 'text/html',
+      },
+    ],
+  });
+}
+
 export async function sendBackupEmail({ filename, buffer, counts, includeBlobs }) {
   const summary = Object.entries(counts)
     .map(([t, n]) => `${t}: ${n}`)

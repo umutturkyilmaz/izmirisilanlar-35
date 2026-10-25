@@ -26,6 +26,21 @@ export const PACKAGE_CATALOG = {
   },
 };
 
+/** Paket fiyatları KDV hariçtir; tahsilat KDV dahil tutar üzerinden yapılır */
+export const KDV_RATE = 20;
+
+/** Kuruş hassasiyetinde KDV dökümü: { net, vat, gross } */
+export function priceBreakdown(netPrice) {
+  const netKurus = Math.round(Number(netPrice) * 100);
+  const vatKurus = Math.round((netKurus * KDV_RATE) / 100);
+  return {
+    net: netKurus / 100,
+    vat: vatKurus / 100,
+    gross: (netKurus + vatKurus) / 100,
+    rate: KDV_RATE,
+  };
+}
+
 export function getServerPackage(id) {
   if (!id) return null;
   return PACKAGE_CATALOG[String(id)] || null;

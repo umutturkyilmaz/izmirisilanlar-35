@@ -126,10 +126,15 @@ export function DistanceSalesPage() {
       <SellerInfo title="Satıcı" />
       <h2 className="font-heading font-semibold text-foreground-950 text-base">Satılan ürün / hizmetler</h2>
       <ul className="list-disc pl-5 space-y-1">
-        <li>Standart İlan (ürün kodu: standart) — 7 gün yayın — {formatPriceInline(499)}</li>
-        <li>Öne Çıkan İlan (ürün kodu: one-cikan) — 14 gün yayın — {formatPriceInline(899)}</li>
-        <li>Kurumsal Paket (ürün kodu: kurumsal) — 30 gün / çoklu ilan — {formatPriceInline(2499)}</li>
+        <li>Standart İlan (ürün kodu: standart) — 7 gün yayın — {formatPriceInline(499)} + KDV</li>
+        <li>Öne Çıkan İlan (ürün kodu: one-cikan) — 14 gün yayın — {formatPriceInline(899)} + KDV</li>
+        <li>Kurumsal Paket (ürün kodu: kurumsal) — 30 gün / çoklu ilan — {formatPriceInline(2499)} + KDV</li>
       </ul>
+      <p>
+        Fiyatlara %20 KDV eklenir; ödeme ekranında KDV dahil toplam tutar gösterilir ve bu tutar
+        tahsil edilir. Her satış için e-Arşiv fatura düzenlenir ve alıcının e-posta adresine
+        gönderilir.
+      </p>
       <p>
         Güncel fiyat ve satın alma:{' '}
         <Link to="/paketler" className="text-primary-600 hover:underline">
