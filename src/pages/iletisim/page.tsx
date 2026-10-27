@@ -62,7 +62,7 @@ export default function ContactPage() {
               <div className="min-w-0 flex-1">
                 <h2 className="font-heading font-semibold text-foreground-950">Hata / site görüşleri</h2>
                 <p className="text-sm text-foreground-600 mt-0.5">{FEEDBACK_WHATSAPP.phone}</p>
-                <p className="text-xs text-foreground-400 mt-1">Teknik sorun ve önerileriniz</p>
+                <p className="text-xs text-amber-800 mt-1">Web sitesi hataları ve gelişimleri içindir.</p>
               </div>
               <i className="ri-arrow-right-up-line text-xl text-foreground-400 group-hover:text-[#25D366]" />
             </a>
