@@ -1,11 +1,41 @@
+import { useState } from 'react';
 import { FEEDBACK_WHATSAPP, whatsappUrl } from '@/lib/site';
 
+const NOTE_KEY = 'feedback-note-closed';
+
 export default function WhatsAppFloat() {
+  const [noteOpen, setNoteOpen] = useState(() => {
+    try {
+      return localStorage.getItem(NOTE_KEY) !== '1';
+    } catch {
+      return true;
+    }
+  });
+
+  const closeNote = () => {
+    setNoteOpen(false);
+    try {
+      localStorage.setItem(NOTE_KEY, '1');
+    } catch {
+      /* depolama kapalıysa sadece bu oturumda gizli kalır */
+    }
+  };
+
   return (
-    <div className="fixed z-[60] left-3 bottom-20 md:left-5 md:bottom-8 flex flex-col items-start gap-1.5 max-w-[16rem]">
-      <p className="text-[11px] leading-snug rounded-lg bg-amber-50 text-amber-950 border border-amber-200 px-2.5 py-1.5 shadow-sm">
-        Web sitesi hataları ve gelişimleri içindir.
-      </p>
+    <div className="fixed z-[60] left-3 bottom-20 md:left-5 md:bottom-8 flex flex-col items-start gap-1">
+      {noteOpen && (
+        <p className="flex items-center gap-1 text-[10px] leading-tight rounded-md bg-amber-50 text-amber-950 border border-amber-200 pl-2 pr-0.5 py-0.5 shadow-sm">
+          <span>Site hataları ve gelişimleri için</span>
+          <button
+            type="button"
+            onClick={closeNote}
+            className="w-4 h-4 flex items-center justify-center rounded text-amber-800 hover:bg-amber-100"
+            aria-label="Uyarıyı kapat"
+          >
+            <i className="ri-close-line text-xs" />
+          </button>
+        </p>
+      )}
       <a
         href={whatsappUrl(
           FEEDBACK_WHATSAPP.whatsapp,
