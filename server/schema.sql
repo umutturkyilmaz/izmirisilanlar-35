@@ -164,7 +164,31 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ========== 11/11 kategoriler (seed) ==========
+-- ========== 11/12 addon_orders (ek hizmet siparişleri) ==========
+CREATE TABLE IF NOT EXISTS addon_orders (
+  id CHAR(36) PRIMARY KEY,
+  employer_id CHAR(36) NOT NULL,
+  addon_id VARCHAR(64) NOT NULL,
+  addon_name VARCHAR(128) NOT NULL,
+  amount INT NOT NULL,
+  currency VARCHAR(8) NOT NULL DEFAULT 'TRY',
+  status VARCHAR(64) NOT NULL DEFAULT 'pending',
+  iyzico_payment_id VARCHAR(128) NULL,
+  iyzico_token VARCHAR(255) NULL,
+  form_data JSON NULL,
+  buyer_name VARCHAR(255) NULL,
+  buyer_email VARCHAR(255) NULL,
+  buyer_phone VARCHAR(64) NULL,
+  company_name VARCHAR(255) NULL,
+  tax_id VARCHAR(64) NULL,
+  billing_address TEXT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  CONSTRAINT fk_addon_emp FOREIGN KEY (employer_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_addon_token (iyzico_token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ========== 12/13 kategoriler (seed) ==========
 INSERT IGNORE INTO job_categories (name, icon, sort_order) VALUES
   ('Teknoloji', 'ri-code-s-slash-line', 1),
   ('Satis & Pazarlama', 'ri-megaphone-line', 2),
@@ -177,3 +201,28 @@ INSERT IGNORE INTO job_categories (name, icon, sort_order) VALUES
   ('Turizm & Otelcilik', 'ri-hotel-line', 9),
   ('Gıda', 'ri-restaurant-2-line', 10),
   ('Diger', 'ri-briefcase-line', 99);
+-- ========== 14/15 cv_uploads ==========
+CREATE TABLE IF NOT EXISTS cv_uploads (
+  id CHAR(36) PRIMARY KEY,
+  full_name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  phone VARCHAR(64) NOT NULL,
+  city VARCHAR(128) NOT NULL,
+  position VARCHAR(255) NOT NULL,
+  experience_level VARCHAR(64) NOT NULL,
+  education_level VARCHAR(64) NOT NULL,
+  cv_file_path TEXT NOT NULL,
+  portfolio_url TEXT NULL,
+  status ENUM('pending','reviewed','contacted','hired','rejected') NOT NULL DEFAULT 'pending',
+  candidate_id CHAR(36) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  INDEX idx_cv_email (email),
+  INDEX idx_cv_city (city),
+  INDEX idx_cv_position (position),
+  INDEX idx_cv_experience (experience_level),
+  INDEX idx_cv_education (education_level),
+  INDEX idx_cv_status (status),
+  INDEX idx_cv_created (created_at),
+  CONSTRAINT fk_cv_candidate FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

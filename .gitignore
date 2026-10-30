@@ -12,3 +12,7 @@ dist
 coverage
 *.tsbuildinfo
 .railway
+
+# KAM gecici dosyalari
+*.bak-*
+server/test-*.mjs

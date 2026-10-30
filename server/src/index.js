@@ -18,7 +18,7 @@ import {
   refundPayment,
   retrievePaymentDetails,
 } from './iyzico.js';
-import { getServerPackage, packageCreditsMeta, priceBreakdown } from './packages.js';
+import { getServerPackage, getAddonService, packageCreditsMeta, priceBreakdown } from './packages.js';
 import { assertUploadContent, publicError } from './security.js';
 import { isValidVkn, normalizeVkn } from './vkn.js';
 import { assessEmployer } from './employerRisk.js';
@@ -146,6 +146,31 @@ async function ensureSchema() {
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS addon_orders (
+      id CHAR(36) PRIMARY KEY,
+      employer_id CHAR(36) NOT NULL,
+      addon_id VARCHAR(64) NOT NULL,
+      addon_name VARCHAR(128) NOT NULL,
+      amount INT NOT NULL,
+      currency VARCHAR(8) NOT NULL DEFAULT 'TRY',
+      status VARCHAR(64) NOT NULL DEFAULT 'pending',
+      iyzico_payment_id VARCHAR(128) NULL,
+      iyzico_token VARCHAR(255) NULL,
+      form_data JSON NULL,
+      buyer_name VARCHAR(255) NULL,
+      buyer_email VARCHAR(255) NULL,
+      buyer_phone VARCHAR(64) NULL,
+      company_name VARCHAR(255) NULL,
+      tax_id VARCHAR(64) NULL,
+      billing_address TEXT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NULL,
+      CONSTRAINT fk_addon_emp FOREIGN KEY (employer_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_addon_token (iyzico_token)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   for (const sql of [
     `ALTER TABLE uploaded_files ADD COLUMN is_private TINYINT(1) NOT NULL DEFAULT 0`,
     `ALTER TABLE uploaded_files ADD COLUMN owner_id CHAR(36) NULL`,
@@ -1048,6 +1073,157 @@ app.post('/api/upload', auth, (req, res) => {
   });
 });
 
+
+
+// ---- CV Upload (public, no auth required) ----
+const cvUpload = multer({
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Sadece PDF ve DOCX dosyaları kabul edilir'), false);
+    }
+  },
+});
+
+app.post('/api/cv-upload', cvUpload.single('cv_file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'CV dosyası zorunludur' });
+    }
+    const {
+      full_name,
+      email,
+      phone,
+      city,
+      position,
+      experience_level,
+      education_level,
+      portfolio_url,
+    } = req.body;
+
+    // Validate required fields
+    if (!full_name || !email || !phone || !city || !position || !experience_level || !education_level) {
+      return res.status(400).json({ error: 'Tüm zorunlu alanları doldurun' });
+    }
+
+    // Save CV file to uploaded_files (private)
+    const extMap = {
+      'application/pdf': '.pdf',
+      'application/msword': '.doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+    };
+    const ext = extMap[req.file.mimetype] || '.pdf';
+    const filename = `${crypto.randomUUID()}${ext}`;
+
+    await pool.query(
+      'INSERT INTO uploaded_files (id, mime, data, is_private, owner_id) VALUES (?, ?, ?, ?, ?)',
+      [filename, req.file.mimetype, req.file.buffer, 1, null], // owner_id null for public CV uploads
+    );
+
+    // Create cv_uploads record
+    const cvId = crypto.randomUUID();
+    await pool.query(
+      'INSERT INTO cv_uploads (id, full_name, email, phone, city, position, experience_level, education_level, cv_file_path, portfolio_url, status, candidate_id)' +
+      ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [cvId, full_name, email, phone, city, position, experience_level, education_level, filename, portfolio_url || null, 'pending', null],
+    );
+
+    res.json({ ok: true, message: "CV'niz alındı, işverenler inceleyecek", cv_id: cvId });
+  } catch (e) {
+    logError('cv-upload', { error: e.message });
+    res.status(500).json({ error: 'CV yüklenemedi, lütfen tekrar deneyin' });
+  }
+});
+
+// ---- Employer CV Search (auth required, employer/admin) ----
+app.get('/api/employer/cv-search', auth, async (req, res) => {
+  if (req.user.role !== 'employer' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Sadece işverenler erişebilir' });
+  }
+  try {
+    const { city, position, experience_level, education_level, status, limit = '50', offset = '0' } = req.query;
+    const where = [];
+    const params = [];
+
+    if (city) {
+      where.push('city LIKE ?');
+      params.push(`%${city}%`);
+    }
+    if (position) {
+      where.push('position LIKE ?');
+      params.push(`%${position}%`);
+    }
+    if (experience_level) {
+      where.push('experience_level = ?');
+      params.push(experience_level);
+    }
+    if (education_level) {
+      where.push('education_level = ?');
+      params.push(education_level);
+    }
+    if (status) {
+      where.push('status = ?');
+      params.push(status);
+    }
+
+    const whereClause = where.length > 0 ? 'WHERE ' + where.join(' AND ') : '';
+    const sql = 'SELECT id, full_name, email, phone, city, position, experience_level, education_level, cv_file_path, portfolio_url, status, created_at' +
+                ` FROM cv_uploads ${whereClause}` +
+                ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+
+    params.push(parseInt(limit), parseInt(offset));
+
+    const [rows] = await pool.query(sql, params);
+    const [[{ total }]] = await pool.query(`SELECT COUNT(*) as total FROM cv_uploads ${whereClause}`, params.slice(0, -2));
+
+    res.json({ cvs: rows, total, limit: parseInt(limit), offset: parseInt(offset) });
+  } catch (e) {
+    logError('cv-search', { error: e.message });
+    res.status(500).json({ error: 'Arama başarısız' });
+  }
+});
+
+// ---- Employer CV Detail (auth required, employer/admin) ----
+app.get('/api/employer/cv/:id', auth, async (req, res) => {
+  if (req.user.role !== 'employer' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Sadece işverenler erişebilir' });
+  }
+  try {
+    const [rows] = await pool.query('SELECT * FROM cv_uploads WHERE id = ? LIMIT 1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'CV bulunamadı' });
+    const cv = rows[0];
+    // Get file data
+    const [fileRows] = await pool.query('SELECT data, mime FROM uploaded_files WHERE id = ? LIMIT 1', [cv.cv_file_path]);
+    if (!fileRows[0]) return res.status(404).json({ error: 'CV dosyası bulunamadı' });
+    res.json({ cv, file: { data: fileRows[0].data.toString('base64'), mime: fileRows[0].mime } });
+  } catch (e) {
+    logError('cv-detail', { error: e.message });
+    res.status(500).json({ error: 'CV detayı alınamadı' });
+  }
+});
+
+// ---- Employer CV Status Update (auth required, employer/admin) ----
+app.patch('/api/employer/cv/:id/status', auth, async (req, res) => {
+  if (req.user.role !== 'employer' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Sadece işverenler erişebilir' });
+  }
+  try {
+    const { status } = req.body;
+    const validStatuses = ['pending', 'reviewed', 'contacted', 'hired', 'rejected'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Geçersiz durum' });
+    }
+    await pool.query('UPDATE cv_uploads SET status = ?, updated_at = NOW() WHERE id = ?', [status, req.params.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    logError('cv-status', { error: e.message });
+    res.status(500).json({ error: 'Durum güncellenemedi' });
+  }
+});
+
 /** Private CV / dosya — sahibi, ilgili işveren veya admin */
 app.get('/api/files/:filename', auth, async (req, res) => {
   const filename = path.basename(req.params.filename || '');
@@ -1905,6 +2081,160 @@ app.post('/api/payments/checkout', auth, async (req, res) => {
   }
 });
 
+/** Ek hizmet (addon) siparişi başlat */
+app.post('/api/addons/checkout', auth, async (req, res) => {
+  try {
+    if (!['employer', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Ek hizmet yalnızca işverenler için' });
+    }
+    if (req.user.role === 'employer' && req.user.dogrulama_durumu !== 'verified') {
+      return res.status(403).json({
+        error: 'Ek hizmet için önce işveren hesabınızın admin tarafından onaylanması gerekir',
+      });
+    }
+    const rl = await checkRateLimitDb(`addon_checkout:${req.user.id}`, 8, 60 * 60 * 1000);
+    if (!rl.ok) {
+      return res.status(429).json({
+        error: 'Çok fazla ödeme denemesi. Bir süre sonra tekrar deneyin.',
+        retryAfterSec: rl.retryAfterSec,
+      });
+    }
+
+    const b = req.body || {};
+    const addon = getAddonService(b.addon_id);
+    if (!addon) return res.status(400).json({ error: 'Geçersiz ek hizmet' });
+    const orderId = uid();
+
+    // iyzico yoksa: admin onaylı talep
+    if (!isIyzicoReady()) {
+      await pool.query(
+        `INSERT INTO addon_orders
+        (id, employer_id, addon_id, addon_name, amount, net_amount, vat_amount, currency, status, buyer_name, buyer_email, buyer_phone, company_name, tax_id, tax_office, buyer_city, billing_address, form_data)
+        VALUES
+        (:id, :employer_id, :addon_id, :addon_name, :amount, :net_amount, :vat_amount, 'TRY', 'pending_admin', :buyer_name, :buyer_email, :buyer_phone, :company_name, :tax_id, :tax_office, :buyer_city, :billing_address, :form_data)`,
+        {
+          id: orderId,
+          employer_id: req.user.id,
+          addon_id: addon.id,
+          addon_name: addon.name,
+          amount: priceBreakdown(addon.price).gross,
+          net_amount: priceBreakdown(addon.price).net,
+          vat_amount: priceBreakdown(addon.price).vat,
+          buyer_name: b.buyer_name || null,
+          buyer_email: b.buyer_email || null,
+          buyer_phone: b.buyer_phone || null,
+          company_name: b.company_name || null,
+          tax_id: b.tax_id || null,
+          tax_office: String(b.tax_office || '').trim().slice(0, 128) || null,
+          buyer_city: String(b.city || '').trim().slice(0, 64) || null,
+          billing_address: b.billing_address || null,
+          form_data: JSON.stringify({
+          businessName: b.businessName || '',
+          category: b.category || '',
+          phoneBusiness: b.phoneBusiness || '',
+          emailBusiness: b.emailBusiness || '',
+          website: b.website || '',
+        } || {}),
+        },
+      );
+      await notifyEmployerPackage(
+        req.user.id,
+        'Ek hizmet talebiniz alındı',
+        `${addon.name} talebiniz admin onayına iletildi. Onaylanınca iletişime geçileceksiniz.`,
+        '/profil/isveren',
+      );
+      return res.status(201).json({ mode: 'admin_approval', order_id: orderId, message: 'Talebiniz alındı, admin onayı bekleniyor.' });
+    }
+
+    // iyzico ile ödeme
+    await pool.query(
+      `INSERT INTO addon_orders
+      (id, employer_id, addon_id, addon_name, amount, net_amount, vat_amount, currency, status, buyer_name, buyer_email, buyer_phone, company_name, tax_id, tax_office, buyer_city, billing_address, form_data)
+      VALUES
+      (:id, :employer_id, :addon_id, :addon_name, :amount, :net_amount, :vat_amount, 'TRY', 'pending_iyzico', :buyer_name, :buyer_email, :buyer_phone, :company_name, :tax_id, :tax_office, :buyer_city, :billing_address, :form_data)`,
+      {
+        id: orderId,
+        employer_id: req.user.id,
+        addon_id: addon.id,
+        addon_name: addon.name,
+        amount: priceBreakdown(addon.price).gross,
+        net_amount: priceBreakdown(addon.price).net,
+        vat_amount: priceBreakdown(addon.price).vat,
+        buyer_name: b.buyer_name || null,
+        buyer_email: b.buyer_email || null,
+        buyer_phone: b.buyer_phone || null,
+        company_name: b.company_name || null,
+        tax_id: b.tax_id || null,
+        tax_office: String(b.tax_office || '').trim().slice(0, 128) || null,
+        buyer_city: String(b.city || '').trim().slice(0, 64) || null,
+        billing_address: b.billing_address || null,
+        form_data: JSON.stringify({
+          businessName: b.businessName || '',
+          category: b.category || '',
+          phoneBusiness: b.phoneBusiness || '',
+          emailBusiness: b.emailBusiness || '',
+          website: b.website || '',
+        } || {}),
+      },
+    );
+
+    const publicApi = (process.env.PUBLIC_API_URL || `${req.protocol}://${req.get('host')}`).replace(
+      /\/$/, ''
+    );
+    const siteUrl = (
+      process.env.PUBLIC_SITE_URL ||
+      process.env.VITE_PUBLIC_SITE_URL ||
+      'https://izmirisilanlari35.com'
+    ).replace(/\/$/, '');
+    const nameParts = String(b.buyer_name || 'Musteri').trim().split(/\s+/);
+    let init;
+    try {
+      init = await initializeCheckoutForm({
+        conversationId: orderId,
+        basketId: orderId,
+        price: priceBreakdown(addon.price).gross,
+        packageId: addon.id,
+        packageName: addon.name,
+        callbackUrl: `${publicApi}/api/addons/iyzico/callback`,
+        buyer: {
+          id: req.user.id,
+          name: nameParts[0] || 'Musteri',
+          surname: nameParts.slice(1).join(' ') || 'Hesap',
+          email: b.buyer_email || req.user.email,
+          gsmNumber: toIyzicoGsm(b.buyer_phone),
+          identityNumber: (b.tax_id || '11111111111').replace(/\D/g, '').slice(0, 11) || '11111111111',
+          address: b.billing_address || 'Turkiye',
+          city: 'Izmir',
+          ip: req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.ip || '85.34.78.112',
+        },
+      });
+    } catch (e) {
+      await pool.query(`UPDATE addon_orders SET status = 'failed' WHERE id = :id`, { id: orderId });
+      logError('iyzico initialize addon', { error: e.message, orderId });
+      return res.status(502).json({
+        error: `Ödeme başlatılamadı (iyzico: ${e.message || 'bilinmeyen hata'})`,
+      });
+    }
+
+    await pool.query(`UPDATE addon_orders SET iyzico_token = :token WHERE id = :id`, {
+      token: init.token,
+      id: orderId,
+    });
+
+    res.status(201).json({
+      mode: 'iyzico',
+      order_id: orderId,
+      token: init.token,
+      paymentPageUrl: init.paymentPageUrl,
+      returnSiteUrl: `${siteUrl}/odeme/basarili?addon=${encodeURIComponent(addon.id)}&order=${orderId}`,
+    });
+  } catch (e) {
+    logError('addon checkout', { error: e.message });
+    res.status(500).json({ error: 'Ödeme başlatılamadı' });
+  }
+});
+
+
 /** Admin: paket talebini onayla → kredi tanımla */
 app.post('/api/admin/payments/:id/approve', auth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
@@ -2128,6 +2458,127 @@ async function settleIyzicoPayment(token, expectedPaymentId = null) {
   }
   return { outcome, payment };
 }
+
+/** Ek hizmet (addon) iyzico ödemesini kesinleştir */
+async function settleAddonIyzicoPayment(token, expectedOrderId = null) {
+  const result = await retrieveCheckoutForm(token);
+  const conn = await pool.getConnection();
+  let outcome;
+  let order;
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.query(
+      `SELECT * FROM addon_orders
+       WHERE iyzico_token = :token OR id = :basketId OR id = :conversationId
+       ORDER BY (iyzico_token = :token) DESC
+       LIMIT 1 FOR UPDATE`,
+      {
+        token,
+        basketId: result.basketId || '',
+        conversationId: result.conversationId || '',
+      },
+    );
+    order = rows[0];
+    if (!order || (expectedOrderId && order.id !== expectedOrderId)) {
+      await conn.rollback();
+      logError('addon iyzico settle order not found', {
+        basketId: result.basketId,
+        status: result.status,
+        paymentStatus: result.paymentStatus,
+        errorMessage: result.errorMessage,
+      });
+      return { outcome: 'not_found' };
+    }
+
+    if (['paid', 'admin_approved'].includes(order.status)) {
+      await conn.commit();
+      return { outcome: 'already_paid', order };
+    }
+
+    if (order.iyzico_token && order.iyzico_token !== token) {
+      await conn.rollback();
+      logError('addon iyzico token mismatch', { orderId: order.id });
+      return { outcome: 'token_mismatch', order };
+    }
+
+    if (result.status === 'success' && result.paymentStatus === 'SUCCESS') {
+      const addon = getAddonService(order.addon_id);
+      const expected = Number(order.amount) || (addon ? priceBreakdown(addon.price).gross : 0);
+      const basketPrice = Number(result.price);
+      const paid = Number(result.paidPrice);
+      if (
+        !Number.isFinite(basketPrice) ||
+        !Number.isFinite(paid) ||
+        Math.abs(basketPrice - expected) > 0.05 ||
+        paid < expected - 0.05
+      ) {
+        await conn.query(`UPDATE addon_orders SET status = 'amount_mismatch' WHERE id = :id`, {
+          id: order.id,
+        });
+        await conn.commit();
+        logError('addon iyzico amount mismatch', { orderId: order.id, expected, paid });
+        return { outcome: 'amount_mismatch', order };
+      }
+
+      const [upd] = await conn.query(
+        `UPDATE addon_orders SET status = 'paid', iyzico_payment_id = :pid WHERE id = :id AND status IN ('pending_iyzico','pending_admin','failed')`,
+        { pid: String(result.paymentId || result.paymentIdList || token), id: order.id },
+      );
+      await conn.commit();
+      outcome = upd.affectedRows ? 'paid' : 'already_paid';
+    } else {
+      await conn.query(
+        `UPDATE addon_orders SET status = 'failed' WHERE id = :id AND status IN ('pending_iyzico','pending_admin')`,
+        { id: order.id },
+      );
+      await conn.commit();
+      return { outcome: 'failed', order };
+    }
+  } catch (e) {
+    try {
+      await conn.rollback();
+    } catch {
+      /* ignore */
+    }
+    throw e;
+  } finally {
+    conn.release();
+  }
+
+  if (outcome === 'paid') {
+    const orderRef = String(order.id).slice(0, 12).toUpperCase();
+    try {
+      await notifyEmployerPackage(
+        order.employer_id,
+        'Ek hizmet ödemesi onaylandı',
+        `${order.addon_name} siparişiniz onaylandı. En kısa sürede iletişime geçileceksiniz.`,
+      );
+    } catch (e) {
+      logError('addon payment notify', { error: e.message });
+    }
+    let buyerEmail = order.buyer_email;
+    if (!buyerEmail) {
+      const [[u]] = await pool.query(`SELECT email FROM users WHERE id = :id LIMIT 1`, {
+        id: order.employer_id,
+      });
+      buyerEmail = u?.email || null;
+    }
+    void sendPaymentReceiptEmail(buyerEmail, {
+      packageName: order.addon_name,
+      amount: order.amount,
+      orderRef,
+    }).catch((e) => logError('addon payment receipt mail', { error: e.message }));
+    void sendPaymentAdminNotifyEmail({
+      packageName: order.addon_name,
+      amount: order.amount,
+      buyer: [order.buyer_name || order.company_name, buyerEmail].filter(Boolean).join(' · '),
+      orderRef,
+    }).catch((e) => logError('addon payment admin mail', { error: e.message }));
+    // Addon için fatura taslağı da oluşturulabilir (ileride)
+  }
+  return { outcome, order };
+}
+
 
 // ---- e-Arşiv fatura ----
 
@@ -2409,6 +2860,34 @@ app.post('/api/payments/iyzico/callback', express.urlencoded({ extended: true })
   }
 });
 
+/** Ek hizmet (addon) iyzico Checkout Form callback (POST token) */
+app.post('/api/addons/iyzico/callback', express.urlencoded({ extended: true }), async (req, res) => {
+  const siteUrl = (process.env.PUBLIC_SITE_URL || 'https://izmirisilanlari35.com').replace(/\/$/, '');
+  const token = req.body?.token || req.query?.token;
+  if (!token) {
+    return res.redirect(`${siteUrl}/odeme/iptal?reason=no_token`);
+  }
+  try {
+    const { outcome, payment } = await settleAddonIyzicoPayment(String(token));
+    if (outcome === 'paid' || outcome === 'already_paid') {
+      return res.redirect(
+        `${siteUrl}/odeme/basarili?addon=${encodeURIComponent(payment.addon_id)}&order=${payment.id}&ok=1`,
+      );
+    }
+    const reason =
+      outcome === 'not_found'
+        ? 'payment_not_found'
+        : outcome === 'token_mismatch'
+          ? 'error'
+          : outcome;
+    return res.redirect(`${siteUrl}/odeme/iptal?reason=${reason}`);
+  } catch (e) {
+    logError('addon iyzico callback', { error: e.message });
+    return res.redirect(`${siteUrl}/odeme/iptal?reason=error`);
+  }
+});
+
+
 /** Admin: bekleyen/başarısız iyzico siparişini iyzico'dan sorgulayıp kesinleştir */
 app.post('/api/admin/payments/:id/verify-iyzico', auth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
@@ -2423,11 +2902,11 @@ app.post('/api/admin/payments/:id/verify-iyzico', auth, async (req, res) => {
     const { outcome } = await settleIyzicoPayment(p.iyzico_token, p.id);
     const messages = {
       paid: 'Ödeme iyzico’da başarılı — hak tanımlandı.',
-      already_paid: 'Sipariş zaten ödenmiş.',
+      already_paid: 'Siparis zaten odenmis.',
       failed: 'iyzico’da başarılı tahsilat yok — sipariş başarısız olarak kapatıldı.',
       amount_mismatch: 'Tutar uyuşmazlığı — hak tanımlanmadı.',
-      not_found: 'Sipariş eşleşmedi.',
-      token_mismatch: 'Token uyuşmazlığı.',
+      not_found: 'Siparis eslesmedi.',
+      token_mismatch: 'Token uyusmazligi.',
     };
     res.json({ ok: outcome === 'paid' || outcome === 'already_paid', outcome, message: messages[outcome] });
   } catch (e) {
@@ -2435,6 +2914,139 @@ app.post('/api/admin/payments/:id/verify-iyzico', auth, async (req, res) => {
     res.status(502).json({ error: `iyzico sorgusu başarısız: ${e.message}` });
   }
 });
+
+/** Admin: ek hizmet (addon) iyzico siparişini sorgula */
+app.post('/api/admin/addons/:id/verify-iyzico', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  if (!isIyzicoReady()) return res.status(400).json({ error: 'iyzico kapalı' });
+  const [rows] = await pool.query(`SELECT id, iyzico_token, status FROM addon_orders WHERE id = :id LIMIT 1`, {
+    id: req.params.id,
+  });
+  const o = rows[0];
+  if (!o) return res.status(404).json({ error: 'Sipariş yok' });
+  if (!o.iyzico_token) return res.status(400).json({ error: 'Bu siparişte iyzico oturumu yok' });
+  try {
+    const { outcome } = await settleAddonIyzicoPayment(o.iyzico_token, o.id);
+    const messages = {
+      paid: 'Ödeme iyzico\'da başarılı - sipariş onaylandi.',
+      already_paid: 'Siparis zaten odenmis.',
+      failed: 'iyzico\'da basarili tahsilat yok - siparis basarisiz olarak kapatildi.',
+      amount_mismatch: 'Tutar uyusmazligi - siparis onaylanmadi.',
+      not_found: 'Siparis eslesmedi.',
+      token_mismatch: 'Token uyusmazligi.',
+    };
+    res.json({ ok: outcome === 'paid' || outcome === 'already_paid', outcome, message: messages[outcome] });
+  } catch (e) {
+    logError('admin verify addon iyzico', { error: e.message, id: o.id });
+    res.status(502).json({ error: `iyzico sorgusu başarısız: ${e.message}` });
+  }
+
+
+// Admin: ek hizmet (addon) talebini onayla → kredi tanımla
+app.post('/api/admin/addons/:id/approve', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.query(`SELECT * FROM addon_orders WHERE id = :id LIMIT 1 FOR UPDATE`, {
+      id: req.params.id,
+    });
+    const order = rows[0];
+    if (!order) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Sipariş yok' });
+    }
+    if (order.status !== 'pending_admin') {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Sipariş zaten işlenmiş veya iyzico ile ödendi' });
+    }
+    const addon = getAddonService(order.addon_id);
+    if (!addon) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Geçersiz ek hizmet' });
+    }
+    // Addon ödeme kaydı oluştur ve işverene kredi/yetki tanı
+    const [upd] = await conn.query(
+      `UPDATE addon_orders SET status = 'admin_approved' WHERE id = :id AND status IN ('pending_admin')`,
+      { id: order.id },
+    );
+    if (!upd.affectedRows) {
+      await conn.rollback();
+      return res.status(409).json({ error: 'Sipariş zaten işlenmiş' });
+    }
+    // İşverene kredi tanımla (paket hakkı tanımı)
+    const creditId = uid();
+    await pool.query(
+      `INSERT INTO employer_credits (id, employer_id, addon_id, addon_name, duration_days, featured, remaining, created_at)
+      VALUES (:creditId, :employerId, :addonId, :addonName, :durationDays, :featured, :remaining, NOW())`,
+      {
+        creditId,
+        employerId: order.employer_id,
+        addonId: order.addon_id,
+        addonName: order.addon_name,
+        durationDays: 30,
+        featured: 0,
+        remaining: 1,
+      },
+    );
+    // İşveren profiline bildir
+    await notifyEmployerPackage(
+      order.employer_id,
+      'Ek hizmet talebi onaylandı',
+      `${order.addon_name} talebiniz onaylandı. 30 günlük kullanım hakkı tanımlandı.`,
+      '/profil/isveren',
+    );
+    await conn.commit();
+    res.json({ ok: true, status: 'admin_approved', credit_id: creditId });
+  } catch (e) {
+    await conn.rollback();
+    logError('admin addon approve', { error: e.message, id: req.params.id });
+    res.status(500).json({ error: 'Onay başarısız' });
+  } finally {
+    conn.release();
+  }
+});
+
+// Admin: ek hizmet (addon) talebini reddet
+app.post('/api/admin/addons/:id/reject', auth, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin' });
+  const reason = String(req.body?.reason || '').trim().slice(0, 300);
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.query(`SELECT * FROM addon_orders WHERE id = :id LIMIT 1 FOR UPDATE`, {
+      id: req.params.id,
+    });
+    const order = rows[0];
+    if (!order) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Sipariş yok' });
+    }
+    if (order.status !== 'pending_admin') {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Sipariş zaten işlenmiş' });
+    }
+    await pool.query(`UPDATE addon_orders SET status = 'admin_rejected' WHERE id = :id`, { id: order.id });
+    await notifyEmployerPackage(
+      order.employer_id,
+      'Ek hizmet talebi reddedildi',
+      reason || `${order.addon_name} talebiniz reddedildi. Detay için iletişime geçin.`,
+      '/profil/isveren',
+    );
+    await conn.commit();
+    res.json({ ok: true, status: 'admin_rejected' });
+  } catch (e) {
+    await conn.rollback();
+    logError('admin addon reject', { error: e.message, id: req.params.id });
+    res.status(500).json({ error: 'Reddetme başarısız' });
+  } finally {
+    conn.release();
+  }
+});
+
+});
+
+
 
 /**
  * iyzico raporundan siparişin tamamen iade/iptal edilip edilmediğini çıkarır.

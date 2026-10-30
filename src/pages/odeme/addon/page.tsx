@@ -1,0 +1,508 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import Navbar from '@/components/feature/Navbar';
+import Footer from '@/components/feature/Footer';
+import DocumentHead from '@/components/feature/DocumentHead';
+import { useAuth } from '@/hooks/useAuth';
+import { getAddonById, formatPrice, priceBreakdown, KDV_RATE, ADDON_SERVICES } from '@/data/packages';
+import { api } from '@/lib/api';
+import { checkRateLimit } from '@/lib/rateLimit';
+import { createNotification } from '@/lib/notifications';
+import { fetchIyzicoStatus } from '@/lib/iyzico';
+import PaymentLogos from '@/components/feature/PaymentLogos';
+
+export default function AddonCheckoutPage() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const addonId = searchParams.get('addon') || 'google-business-profile';
+  const selected = useMemo(() => getAddonById(addonId) || ADDON_SERVICES[0], [addonId]);
+
+  const [form, setForm] = useState({
+    fullName: profile?.full_name || '',
+    email: user?.email || '',
+    phone: profile?.phone || '',
+    companyName: profile?.company_name || '',
+    taxId: profile?.vergi_numarasi || '',
+    taxOffice: '',
+    city: profile?.city || 'İzmir',
+    address: '',
+    // Addon-specific form fields
+    businessName: '',
+    category: '',
+    phoneBusiness: '',
+    emailBusiness: '',
+    website: '',
+    acceptTerms: false,
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [iyzicoOn, setIyzicoOn] = useState(false);
+
+  useEffect(() => {
+    fetchIyzicoStatus().then((s) => setIyzicoOn(s.enabled));
+  }, []);
+
+  const update = (field: string, value: string | boolean) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  const validate = () => {
+    const next: Record<string, string> = {};
+    if (!form.fullName.trim()) next.fullName = 'Ad soyad zorunludur';
+    if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      next.email = 'Geçerli e-posta giriniz';
+    }
+    if (!form.phone.trim() || form.phone.replace(/\D/g, '').length < 10) {
+      next.phone = 'Geçerli telefon giriniz';
+    }
+    if (!form.companyName.trim()) next.companyName = 'Şirket / unvan zorunludur';
+    const taxDigits = form.taxId.replace(/\D/g, '');
+    if (taxDigits && taxDigits.length !== 10 && taxDigits.length !== 11) {
+      next.taxId = 'Vergi no 10, TCKN 11 haneli olmalı';
+    }
+    if (taxDigits.length === 10 && !form.taxOffice.trim()) {
+      next.taxOffice = 'Vergi numarası için vergi dairesi zorunludur';
+    }
+    if (!form.address.trim() || form.address.trim().length < 10) {
+      next.address = 'Fatura adresi zorunludur';
+    }
+    // Addon-specific validation
+    if (!form.businessName.trim()) next.businessName = 'İşletme adı zorunludur';
+    if (!form.category) next.category = 'Kategori seçmelisiniz';
+    if (!form.phoneBusiness.trim() || form.phoneBusiness.replace(/\D/g, '').length < 10) {
+      next.phoneBusiness = 'İşletme telefonu zorunludur';
+    }
+    if (!form.emailBusiness.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.emailBusiness)) {
+      next.emailBusiness = 'İşletme e-postası zorunludur';
+    }
+    if (form.website && !/^https?:\/\/.+/.test(form.website)) {
+      next.website = 'Geçerli bir web sitesi adresi giriniz (https:// ile başlasın)';
+    }
+    if (!form.acceptTerms) next.acceptTerms = 'Mesafeli satış sözleşmesini onaylamalısınız';
+    if (!user) next.auth = 'Sipariş vermek için giriş yapmalısınız';
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const handlePay = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate() || !user) return;
+
+    const rl = checkRateLimit(`addon_checkout_${user.id}`, 5, 10 * 60 * 1000);
+    if (!rl.ok) {
+      setErrors({ auth: `Çok fazla deneme. ${rl.retryAfterSec} sn sonra tekrar deneyin.` });
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const formData = {
+        businessName: form.businessName.trim(),
+        category: form.category,
+        phoneBusiness: form.phoneBusiness.trim(),
+        emailBusiness: form.emailBusiness.trim(),
+        website: form.website.trim(),
+      };
+
+      const result = await api<{
+        mode: 'pending_admin' | 'iyzico' | 'test';
+        payment_id: string;
+        paymentPageUrl?: string;
+        token?: string;
+        message?: string;
+      }>('/api/addons/checkout', {
+        body: {
+          addon_id: selected.id,
+          buyer_name: form.fullName.trim(),
+          buyer_email: form.email.trim(),
+          buyer_phone: form.phone.trim(),
+          company_name: form.companyName.trim(),
+          tax_id: form.taxId.trim(),
+          tax_office: form.taxOffice.trim(),
+          city: form.city.trim(),
+          billing_address: form.address.trim(),
+          form_data: formData,
+        },
+      });
+
+      if (result.mode === 'iyzico' && result.paymentPageUrl) {
+        window.location.href = result.paymentPageUrl;
+        return;
+      }
+
+      if (result.mode === 'pending_admin') {
+        await createNotification({
+          userId: user.id,
+          title: 'Ek hizmet talebi alındı',
+          body: `${selected.name} talebiniz admin onayına iletildi.`,
+          link: '/profil/isveren',
+        });
+        navigate(
+          `/odeme/addon/basarili?addon=${selected.id}&order=${result.payment_id}&pending=1`,
+        );
+        return;
+      }
+
+      navigate(`/odeme/addon/basarili?addon=${selected.id}&order=${result.payment_id}`);
+    } catch (err) {
+      setErrors({
+        auth: err instanceof Error ? err.message : 'Sipariş tamamlanamadı',
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const grossPrice = priceBreakdown(selected.price).gross;
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <DocumentHead
+        title={`Ödeme — ${selected.name}`}
+        description={selected.description}
+        path="/odeme/addon"
+      />
+      <Navbar />
+      <main className="flex-1 pt-[var(--site-header-offset,5rem)] pb-16">
+        <div className="px-4 md:px-6 lg:px-8 max-w-5xl mx-auto">
+          <div className="mb-8">
+            <Link to="/profil/isveren" className="text-sm text-primary-600 hover:underline inline-flex items-center gap-1">
+              <i className="ri-arrow-left-line" />
+              İşveren Profiline Dön
+            </Link>
+            <h1 className="font-heading text-2xl md:text-3xl font-bold text-foreground-950 mt-3">
+              {selected.name} — Sipariş Ver
+            </h1>
+            <p className="text-foreground-600 text-sm mt-1">
+              Ek hizmet: {selected.description} · KDV dahil · 3 iş günü içinde teslim
+            </p>
+            <p className="text-xs text-foreground-500 mt-2 flex flex-wrap gap-x-3 gap-y-1">
+              <Link to="/mesafeli-satis" className="text-primary-600 hover:underline">Mesafeli satış</Link>
+              <Link to="/iade-iptal" className="text-primary-600 hover:underline">İade / iptal</Link>
+              <Link to="/kvkk" className="text-primary-600 hover:underline">KVKK</Link>
+              <Link to="/gizlilik" className="text-primary-600 hover:underline">Gizlilik</Link>
+            </p>
+            {!user && (
+              <p className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                Siparişi tamamlamak için{' '}
+                <Link to={`/giris?from=${encodeURIComponent(`/odeme/addon?addon=${selected.id}`)}`} className="underline font-medium">
+                  giriş yapın
+                </Link>
+                {' '}veya{' '}
+                <Link to="/kayit" className="underline font-medium">işveren kaydı</Link> oluşturun.
+              </p>
+            )}
+            {errors.auth && <p className="mt-2 text-xs text-red-600">{errors.auth}</p>}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            <form onSubmit={handlePay} className="lg:col-span-3 space-y-5">
+              <div className="rounded-2xl border border-background-200 bg-background-50 dark:bg-background-100 p-5 md:p-6 space-y-4">
+                <h2 className="font-heading font-semibold text-foreground-950">Fatura Bilgileri</h2>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Ad Soyad *</label>
+                    <input
+                      type="text"
+                      value={form.fullName}
+                      onChange={(e) => update('fullName', e.target.value)}
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                    {errors.fullName && <p className="text-xs text-red-600 mt-1">{errors.fullName}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">E-posta *</label>
+                    <input
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => update('email', e.target.value)}
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                    {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Telefon *</label>
+                    <input
+                      type="tel"
+                      value={form.phone}
+                      onChange={(e) => update('phone', e.target.value)}
+                      placeholder="05xx xxx xx xx"
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                    {errors.phone && <p className="text-xs text-red-600 mt-1">{errors.phone}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Şirket / Unvan *</label>
+                    <input
+                      type="text"
+                      value={form.companyName}
+                      onChange={(e) => update('companyName', e.target.value)}
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                    {errors.companyName && <p className="text-xs text-red-600 mt-1">{errors.companyName}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Vergi No / TCKN</label>
+                    <input
+                      type="text"
+                      value={form.taxId}
+                      onChange={(e) => update('taxId', e.target.value)}
+                      placeholder="10 haneli vergi no veya 11 haneli TCKN"
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                    {errors.taxId && <p className="text-xs text-red-600 mt-1">{errors.taxId}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Vergi Dairesi</label>
+                    <input
+                      type="text"
+                      value={form.taxOffice}
+                      onChange={(e) => update('taxOffice', e.target.value)}
+                      placeholder="Ör. Konak"
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                    {errors.taxOffice && <p className="text-xs text-red-600 mt-1">{errors.taxOffice}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">İl</label>
+                    <input
+                      type="text"
+                      value={form.city}
+                      onChange={(e) => update('city', e.target.value)}
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Fatura Adresi *</label>
+                    <textarea
+                      rows={3}
+                      value={form.address}
+                      onChange={(e) => update('address', e.target.value)}
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500 resize-none"
+                    />
+                    {errors.address && <p className="text-xs text-red-600 mt-1">{errors.address}</p>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-background-200 bg-background-50 dark:bg-background-100 p-5 md:p-6 space-y-4">
+                <h2 className="font-heading font-semibold text-foreground-950">Hizmet Bilgileri</h2>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">İşletme Adı *</label>
+                    <input
+                      type="text"
+                      value={form.businessName}
+                      onChange={(e) => update('businessName', e.target.value)}
+                      placeholder="Google'da görünmesini istediğiniz isim"
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                    {errors.businessName && <p className="text-xs text-red-600 mt-1">{errors.businessName}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Kategori *</label>
+                    <select
+                      value={form.category}
+                      onChange={(e) => update('category', e.target.value)}
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    >
+                      <option value="">Kategori seçiniz</option>
+                      <option value="restaurant">Restoran / Kahve</option>
+                      <option value="retail">Mağaza / Dükkan</option>
+                      <option value="service">Hizmet Firması</option>
+                      <option value="professional">Profesyonel Hizmet</option>
+                      <option value="other">Diğer</option>
+                    </select>
+                    {errors.category && <p className="text-xs text-red-600 mt-1">{errors.category}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">İşletme Telefonu *</label>
+                    <input
+                      type="tel"
+                      value={form.phoneBusiness}
+                      onChange={(e) => update('phoneBusiness', e.target.value)}
+                      placeholder="+90 232 123 45 67"
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                    {errors.phoneBusiness && <p className="text-xs text-red-600 mt-1">{errors.phoneBusiness}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">İşletme E-postası *</label>
+                    <input
+                      type="email"
+                      value={form.emailBusiness}
+                      onChange={(e) => update('emailBusiness', e.target.value)}
+                      placeholder="info@ornek.com"
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                    {errors.emailBusiness && <p className="text-xs text-red-600 mt-1">{errors.emailBusiness}</p>}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-foreground-700 mb-1.5">Web Sitesi</label>
+                    <input
+                      type="url"
+                      value={form.website}
+                      onChange={(e) => update('website', e.target.value)}
+                      placeholder="https://ornek.com"
+                      className="w-full rounded-xl border border-background-300 bg-background-50 px-3 py-2.5 text-sm outline-none focus:border-primary-500"
+                    />
+                    {errors.website && <p className="text-xs text-red-600 mt-1">{errors.website}</p>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-background-200 bg-background-50 dark:bg-background-100 p-5 md:p-6">
+                <h2 className="font-heading font-semibold text-foreground-950 mb-3">Ödeme Yöntemi</h2>
+                <div className="flex items-center gap-3 p-4 rounded-xl border border-primary-300 bg-primary-50/50 dark:bg-primary-950/20">
+                  <i className="ri-bank-card-line text-2xl text-primary-600" />
+                  <div>
+                    <p className="font-medium text-sm text-foreground-950">Kredi / Banka Kartı (iyzico)</p>
+                    <p className="text-xs text-foreground-600 mt-0.5">
+                      {iyzicoOn
+                        ? '3D Secure ile iyzico Checkout Form\'a yönlendirileceksiniz.'
+                        : 'Kart ödemesi şu an kapalı; sipariş kaydı oluşur ve admin onayıyla işleme alınır.'}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-center">
+                  <PaymentLogos variant="band" />
+                </div>
+
+                <div className="mt-4 rounded-xl border border-background-200 bg-background-100/60 px-3 py-2.5 text-xs text-foreground-600 space-y-1">
+                  <p className="font-medium text-foreground-800">Sipariş öncesi yasal belgeler</p>
+                  <p className="flex flex-wrap gap-x-3 gap-y-1">
+                    <Link to="/mesafeli-satis" className="text-primary-600 hover:underline">Mesafeli satış sözleşmesi</Link>
+                    <Link to="/iade-iptal" className="text-primary-600 hover:underline">İade ve iptal politikası</Link>
+                    <Link to="/kvkk" className="text-primary-600 hover:underline">KVKK aydınlatma</Link>
+                    <Link to="/gizlilik" className="text-primary-600 hover:underline">Gizlilik politikası</Link>
+                  </p>
+                </div>
+
+                <label className="flex items-start gap-2.5 mt-4 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.acceptTerms}
+                    onChange={(e) => update('acceptTerms', e.target.checked)}
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-foreground-700">
+                    <Link to="/mesafeli-satis" className="text-primary-600 hover:underline">
+                      Mesafeli satış sözleşmesi
+                    </Link>
+                    ,{' '}
+                    <Link to="/iade-iptal" className="text-primary-600 hover:underline">
+                      iade / iptal politikası
+                    </Link>
+                    ,{' '}
+                    <Link to="/kvkk" className="text-primary-600 hover:underline">
+                      KVKK
+                    </Link>{' '}
+                    ve{' '}
+                    <Link to="/gizlilik" className="text-primary-600 hover:underline">
+                      gizlilik politikasını
+                    </Link>{' '}
+                    okudum; seçili ek hizmet bedelini ödemeyi kabul ediyorum. *
+                  </span>
+                </label>
+                {errors.acceptTerms && <p className="text-xs text-red-600 mt-1">{errors.acceptTerms}</p>}
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="mt-5 w-full py-3.5 rounded-xl bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white font-semibold transition-colors"
+                >
+                  {submitting
+                    ? 'İşleniyor...'
+                    : iyzicoOn
+                      ? `${formatPrice(grossPrice)} — Kart ile Satın Al`
+                      : `${formatPrice(grossPrice)} — Siparişi Tamamla`}
+                </button>
+                <div className="mt-3 flex justify-center">
+                  <PaymentLogos variant="pay" />
+                </div>
+              </div>
+            </form>
+
+            <aside className="lg:col-span-2">
+              <div className="sticky top-24 rounded-2xl border border-background-200 bg-background-50 dark:bg-background-100 p-5 md:p-6">
+                <h2 className="font-heading font-semibold text-foreground-950 mb-4">Sipariş Özeti</h2>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-foreground-600">Hizmet</span>
+                    <span className="font-medium text-foreground-950 text-right">{selected.name}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-foreground-600">Hizmet kodu</span>
+                    <span className="font-mono text-xs text-foreground-800">{selected.id}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-foreground-600">Teslim Süresi</span>
+                    <span className="font-medium text-foreground-950">3 iş günü</span>
+                  </div>
+                  <p className="text-xs text-foreground-500 leading-relaxed pt-1">{selected.description}</p>
+                  <ul className="text-xs text-foreground-600 space-y-1 pt-1">
+                    {selected.features.slice(0, 6).map((f) => (
+                      <li key={f} className="flex gap-1.5">
+                        <i className="ri-check-line text-primary-600 shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="border-t border-background-200 pt-3 space-y-1.5">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-foreground-600">Ara toplam (KDV hariç)</span>
+                      <span className="font-medium text-foreground-950">{formatPrice(selected.price)}</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-foreground-600">KDV (%{KDV_RATE})</span>
+                      <span className="font-medium text-foreground-950">
+                        {formatPrice(priceBreakdown(selected.price).vat)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-1">
+                      <span className="font-semibold text-foreground-950">Toplam (KDV dahil)</span>
+                      <span className="font-heading text-xl font-bold text-primary-600">
+                        {formatPrice(grossPrice)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-background-200">
+                  <p className="text-xs font-medium text-foreground-700 mb-2">Diğer ek hizmetler</p>
+                  <div className="flex flex-col gap-1.5">
+                    {ADDON_SERVICES.map((pkg) => (
+                      <Link
+                        key={pkg.id}
+                        to={`/odeme/addon?addon=${pkg.id}`}
+                        className={`text-xs px-3 py-2 rounded-lg transition-colors ${
+                          pkg.id === selected.id
+                            ? 'bg-primary-100 text-primary-800 font-medium'
+                            : 'hover:bg-background-200 text-foreground-600'
+                        }`}
+                      >
+                        {pkg.name} — {formatPrice(pkg.price)} + KDV
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+}

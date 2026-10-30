@@ -1,0 +1,25 @@
+-- ========== 14/15 cv_uploads ==========
+CREATE TABLE IF NOT EXISTS cv_uploads (
+  id CHAR(36) PRIMARY KEY,
+  full_name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  phone VARCHAR(64) NOT NULL,
+  city VARCHAR(128) NOT NULL,
+  position VARCHAR(255) NOT NULL,
+  experience_level VARCHAR(64) NOT NULL,
+  education_level VARCHAR(64) NOT NULL,
+  cv_file_path TEXT NOT NULL,
+  portfolio_url TEXT NULL,
+  status ENUM('pending','reviewed','contacted','hired','rejected') NOT NULL DEFAULT 'pending',
+  candidate_id CHAR(36) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NULL,
+  INDEX idx_cv_email (email),
+  INDEX idx_cv_city (city),
+  INDEX idx_cv_position (position),
+  INDEX idx_cv_experience (experience_level),
+  INDEX idx_cv_education (education_level),
+  INDEX idx_cv_status (status),
+  INDEX idx_cv_created (created_at),
+  CONSTRAINT fk_cv_candidate FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

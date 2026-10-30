@@ -20,7 +20,10 @@ const Packages = lazyRetry(() => import("../pages/paketler/page"));
 const Checkout = lazyRetry(() => import("../pages/odeme/page"));
 const PaymentSuccess = lazyRetry(() => import("../pages/odeme/basarili/page"));
 const PaymentCancel = lazyRetry(() => import("../pages/odeme/iptal/page"));
+const AddonCheckout = lazyRetry(() => import("../pages/odeme/addon/page"));
+const AddonPaymentSuccess = lazyRetry(() => import("../pages/odeme/addon/basarili/page"));
 const ForgotPassword = lazyRetry(() => import("../pages/sifremi-unuttum/page"));
+const CvUpload = lazyRetry(() => import("../pages/cv-yukle/page"));
 const ResetPassword = lazyRetry(() => import("../pages/sifre-sifirla/page"));
 const EmailVerify = lazyRetry(() => import("../pages/email-dogrula/page"));
 const ProfileRedirect = lazyRetry(() => import("../pages/profil/redirect"));
@@ -64,6 +67,8 @@ const routes: RouteObject[] = [
   { path: "/odeme", element: <Checkout /> },
   { path: "/odeme/basarili", element: <PaymentSuccess /> },
   { path: "/odeme/iptal", element: <PaymentCancel /> },
+  { path: "/odeme/addon", element: <AddonCheckout /> },
+  { path: "/odeme/addon/basarili", element: <AddonPaymentSuccess /> },
   { path: "/giris", element: <Login /> },
   { path: "/kayit", element: <Register /> },
   { path: "/sifremi-unuttum", element: <ForgotPassword /> },
@@ -71,6 +76,7 @@ const routes: RouteObject[] = [
   { path: "/email-dogrula", element: <EmailVerify /> },
   { path: "/hakkimizda", element: <About /> },
   { path: "/iletisim", element: <Contact /> },
+  { path: "/cv-yukle", element: <CvUpload /> },
   { path: "/kvkk", element: <KvkkPage /> },
   { path: "/gizlilik", element: <PrivacyPage /> },
   { path: "/mesafeli-satis", element: <DistanceSalesPage /> },

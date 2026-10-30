@@ -26,6 +26,22 @@ export const PACKAGE_CATALOG = {
   },
 };
 
+/** Ek hizmetler (addon) — pakete bağımsız tek seferlik hizmetler */
+export const ADDON_CATALOG = {
+  'google-business-profile': {
+    id: 'google-business-profile',
+    name: 'Google İşletme Profili Düzenleme',
+    price: 799,
+    description: 'Google Haritalar ve Arama\'da işletme profilini profesyonel hale getirme. Profil bilgileri, fotoğraflar, SEO açıklama, hizmet/ürün listesi, inceleme yönetimi, Google Gönderiler şablonu, performans raporu. 3 iş günü içinde erişim ve onayla yayın.',
+  },
+  'video-ilan-reels': {
+    id: 'video-ilan-reels',
+    name: 'Video İlan + Reels',
+    price: 799,
+    description: 'İş ilanınız için 9:16 dikey Reels/TikTok/Shorts videosu otomatik üretilir. İlan başlığı, ilçe, maaş aralığı ve şirket adınızla markalı. 3 iş günü içinde indirme linki e-posta ve panele gelir. Sosyal medyada ilanınizi öne çıkarın, başvuru sayısını artırın.',
+  },
+};
+
 /** Paket fiyatları KDV hariçtir; tahsilat KDV dahil tutar üzerinden yapılır */
 export const KDV_RATE = 20;
 
@@ -44,6 +60,11 @@ export function priceBreakdown(netPrice) {
 export function getServerPackage(id) {
   if (!id) return null;
   return PACKAGE_CATALOG[String(id)] || null;
+}
+
+export function getAddonService(id) {
+  if (!id) return null;
+  return ADDON_CATALOG[String(id)] || null;
 }
 
 export function packageCreditsMeta(pkg) {

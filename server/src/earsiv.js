@@ -21,7 +21,9 @@ function mode() {
 
 export function isEarsivReady() {
   if (process.env.EARSIV_ENABLED !== 'true') return false;
-  if (mode() === 'TEST') return true;
+  // TEST modunda da gerçek kimlik bilgisi istenir: GİB test portalı
+  // "kullaniciOner" ile kendi test hesabını üretir, ama kullanıcı kodu/şifre
+  // yine de tanımlı olmalıdır (aksi halde login anında net hata verilir).
   return Boolean(process.env.EARSIV_USER && process.env.EARSIV_PASS);
 }
 

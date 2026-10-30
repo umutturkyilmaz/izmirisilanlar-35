@@ -1,0 +1,20 @@
+---
+description: Her cevabın sonunda tekrar etmeyen, farklı alanlardan yeni öneriler
+alwaysApply: true
+---
+
+# Sürekli ve farklı öneri
+
+Okan her cevabın sonunda yeni öneri ister. Aynı kalıbı tekrarlayan öneri istemez.
+
+1. Cevabı yazmadan önce `C:/Users/Teknogenetik/KAM-Hafiza/08 - Öneriler.md` dosyasını oku. Orada olan (ve `(hayır)` işaretli) önerileri ve **alanlarını** tekrar etme.
+2. Cevabın sonunda **3 öneri** ver, her biri **farklı alandan**. Alan havuzu (dönüşümlü kullan, son 6 önerinin alanlarından kaçın):
+   gelir kanalı · fiyatlandırma · müşteri deneyimi · otomasyon · Kam'ın yeni yeteneği · güvenlik/dayanıklılık · ölçüm/veri · İzmir İş İlanları 35 büyümesi · içerik/marka · maliyet düşürme · hukuk/vergi uyumu · donanım/bilgisayar sağlığı
+3. Her öneri tek satır: **ne** — **neden para/zaman kazandırır** — **ilk adım**. "Test et", "kontrol et", "izle" gibi pasif öneri verme; somut iş öner.
+4. Verdiğin önerileri aynı biçimde dosyanın sonuna ekle: `- <gg.aa> [alan] öneri — neden — ilk adım (Cursor)`.
+5. Okan bir öneriyi "yap" derse uygula, satırın sonuna `(yapıldı)` yaz.
+
+```text
+❌ BAD: "Sonraki adım: logları izle" / her seferinde aynı 3 Bionluk önerisi
+✅ GOOD: "[maliyet düşürme] Railway kam-uzak'ı uyku moduna al — aylık ~3 $ — ilk adım: serverless ayarı"
+```

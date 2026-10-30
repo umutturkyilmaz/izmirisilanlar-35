@@ -85,3 +85,57 @@ export function priceBreakdown(netPrice: number) {
   const vatKurus = Math.round((netKurus * KDV_RATE) / 100);
   return { net: netKurus / 100, vat: vatKurus / 100, gross: (netKurus + vatKurus) / 100, rate: KDV_RATE };
 }
+
+/** Ek hizmetler — işveren paketine eklenebilir tek seferlik hizmetler */
+export interface AddonService {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: 'TRY';
+  features: string[];
+  icon?: string;
+}
+
+export const ADDON_SERVICES: AddonService[] = [
+  {
+    id: 'google-business-profile',
+    name: 'Google İşletme Profili Düzenleme',
+    description: 'Google Haritalar ve Arama\'da işletmenizin profilini profesyonel hale getirin. Müşteri güvenini artırın, yerel aramalarda öne çıkın.',
+    price: 799,
+    currency: 'TRY',
+    features: [
+      'Profil bilgilerinin tam doldurulması (adres, saatler, telefon, web sitesi, kategori)',
+      'Profesyonel işletme fotoğraflarının yüklenmesi ve optimize edilmesi (kapak, profil, ürün/hizmet)',
+      'İşletme açıklamasının SEO uyumlu yazılması (anahtar kelimelerle)',
+      'Hizmet/ürün listesi oluşturulması (fiyat, açıklama, fotoğraf ile)',
+      'Müşteri incelemeleri yönetimi stratejisi ve şablon yanıtlar',
+      'Google Gönderiler (Posts) ile kampanya/duyuru paylaşım şablonu',
+      'Performans raporu: arama sorguları, görüntülenme, tıklama, yönlendirme verileri',
+      'Teslim: 3 iş günü içinde erişim ve onayınızla yayın',
+    ],
+    icon: 'ri-map-pin-line',
+  },
+  {
+    id: 'video-ilan-reels',
+    name: 'Video İlan + Reels',
+    description: 'İş ilanınız için 9:16 dikey Reels/TikTok/Shorts videosu otomatik üretilir. İlan başlığı, ilçe, maaş aralığı ve şirket adınızla markalı. 3 iş günü içinde indirme linki e-posta ve panele gelir. Sosyal medyada ilanınızı öne çıkarın, başvuru sayısını artırın.',
+    price: 799,
+    currency: 'TRY',
+    features: [
+      'İlan başlığı, ilçe, maaş aralığı ve şirket adıyla 9:16 dikey video (1080x1920)',
+      'Reels / TikTok / YouTube Shorts formatında, 12-15 saniye',
+      'Markanızla başlık, alt yazı ve kapak görseli',
+      'Maaş aralığı ve hızlı başvuru çağrısı (CTA)',
+      'MP4 (H.264) + PNG kapak dosyası',
+      'İndirme linki e-posta ve işveren paneline 3 iş günü içinde',
+      'Sosyal medyada ilanın görünürlüğünü ve başvuru sayısını artırır',
+      'Ek maliyet sıfır — ilan onaylandığında otomatik tetiklenir',
+    ],
+    icon: 'ri-video-line',
+  },
+];
+
+export function getAddonById(id: string): AddonService | undefined {
+  return ADDON_SERVICES.find((s) => s.id === id);
+}
